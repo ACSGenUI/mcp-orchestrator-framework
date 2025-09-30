@@ -1,0 +1,114 @@
+{
+  "name": "ui-analysis-framework",
+  "version": "1.0.0",
+  "description": "UI Analysis Framework for component analysis and effort estimation",
+  "frameworks": {
+    "errorHandling": {
+      "enabled": true,
+      "title": "UI Analysis Error Handling",
+      "description": "Error handling framework for UI component analysis"
+    },
+    "selfEvaluation": {
+      "enabled": true,
+      "title": "UI Component Quality Assessment",
+      "description": "Quality assessment framework for UI component analysis",
+      "metrics": {
+        "componentCoverage": {
+          "name": "Component Coverage Score",
+          "formula": "(Identified Components / Total Visible Components) × 100",
+          "target": 100,
+          "weight": 1
+        },
+        "sizingConsistency": {
+          "name": "Sizing Consistency Score",
+          "formula": "100 - (Standard Deviation of Similar Component Sizes × 20)",
+          "target": 95,
+          "weight": 1
+        },
+        "reusabilityAssessment": {
+          "name": "Reusability Assessment Score",
+          "formula": "(Reusable Components / Total Components) × 100",
+          "target": 90,
+          "weight": 1
+        },
+        "technicalFeasibility": {
+          "name": "Technical Feasibility Score",
+          "formula": "(Feasible Components / Total Components) × 100",
+          "target": 100,
+          "weight": 1
+        },
+        "accessibilityCoverage": {
+          "name": "Accessibility Coverage Score",
+          "formula": "(Components with A11y Notes / Interactive Components) × 100",
+          "target": 100,
+          "weight": 1
+        },
+        "performanceOptimization": {
+          "name": "Performance Optimization Score",
+          "formula": "(Components with Perf Considerations / Total Components) × 100",
+          "target": 80,
+          "weight": 1
+        }
+      },
+      "overallScore": {
+        "formula": "Average of all metrics",
+        "passingThreshold": 95,
+        "maxIterations": 3,
+        "improvementThreshold": 5
+      }
+    },
+    "securityGuardrails": {
+      "enabled": true,
+      "title": "UI Analysis Security Guardrails",
+      "description": "Security guardrails for UI component analysis",
+      "inputValidation": {
+        "allowedDomains": ["*"],
+        "blockedDomains": [],
+        "contentTypes": ["text/html", "application/json", "text/plain"]
+      },
+      "promptInjectionProtection": {
+        "enabled": true,
+        "ignoreEmbeddedInstructions": true,
+        "maintainFocus": true,
+        "flagSuspiciousActivity": true
+      },
+      "outputSanitization": {
+        "escapeOutput": true,
+        "validateContent": true,
+        "removeHarmfulContent": true
+      }
+    },
+    "requiredArtifacts": {
+      "enabled": true,
+      "title": "UI Analysis Required Artifacts",
+      "description": "Required artifacts for UI component analysis",
+      "artifacts": [
+        {
+          "name": "ui_blocks_analysis",
+          "type": "csv",
+          "filename": "ui_blocks_analysis.csv",
+          "template": "ui-blocks-analysis-template.csv",
+          "required": true
+        },
+        {
+          "name": "analysis_summary",
+          "type": "markdown",
+          "filename": "analysis_summary.md",
+          "template": "analysis-summary-template.md",
+          "required": true
+        },
+        {
+          "name": "evaluation_log",
+          "type": "markdown",
+          "filename": "evaluation_log.md",
+          "template": "evaluation-log-template.md",
+          "required": true
+        }
+      ]
+    }
+  },
+  "templates": {
+    "basePath": "./templates",
+    "customTemplates": {}
+  }
+}

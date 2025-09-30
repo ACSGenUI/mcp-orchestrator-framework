@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mcp-framework-server": {
+      "command": "npx",
+      "args": [
+        "mcp-framework-server",
+        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/config-examples/ui-analysis-config.json"
+      ],
+      "env": {}
+    }
+  }
+}

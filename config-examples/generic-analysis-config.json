@@ -1,0 +1,89 @@
+{
+  "name": "generic-analysis-framework",
+  "version": "1.0.0",
+  "description": "Generic Analysis Framework for various analysis tasks",
+  "frameworks": {
+    "errorHandling": {
+      "enabled": true,
+      "title": "Generic Error Handling",
+      "description": "Error handling framework for analysis tasks"
+    },
+    "selfEvaluation": {
+      "enabled": true,
+      "title": "Generic Quality Assessment",
+      "description": "Quality assessment framework for analysis tasks",
+      "metrics": {
+        "accuracy": {
+          "name": "Accuracy Score",
+          "formula": "(Correct Identifications / Total Items) × 100",
+          "target": 95,
+          "weight": 1
+        },
+        "completeness": {
+          "name": "Completeness Score",
+          "formula": "(Identified Items / Expected Items) × 100",
+          "target": 100,
+          "weight": 1
+        },
+        "consistency": {
+          "name": "Consistency Score",
+          "formula": "100 - (Standard Deviation of Similar Items × 10)",
+          "target": 90,
+          "weight": 1
+        }
+      },
+      "overallScore": {
+        "formula": "Average of all metrics",
+        "passingThreshold": 90,
+        "maxIterations": 2,
+        "improvementThreshold": 3
+      }
+    },
+    "securityGuardrails": {
+      "enabled": true,
+      "title": "Generic Security Guardrails",
+      "description": "Security guardrails for analysis tasks",
+      "inputValidation": {
+        "allowedDomains": ["*"],
+        "blockedDomains": [],
+        "contentTypes": ["text/html", "application/json", "text/plain", "text/csv"]
+      },
+      "promptInjectionProtection": {
+        "enabled": true,
+        "ignoreEmbeddedInstructions": true,
+        "maintainFocus": true,
+        "flagSuspiciousActivity": true
+      },
+      "outputSanitization": {
+        "escapeOutput": true,
+        "validateContent": true,
+        "removeHarmfulContent": true
+      }
+    },
+    "requiredArtifacts": {
+      "enabled": true,
+      "title": "Generic Required Artifacts",
+      "description": "Required artifacts for analysis tasks",
+      "artifacts": [
+        {
+          "name": "analysis_data",
+          "type": "csv",
+          "filename": "analysis_data.csv",
+          "template": "generic-analysis-template.csv",
+          "required": true
+        },
+        {
+          "name": "summary_report",
+          "type": "markdown",
+          "filename": "summary_report.md",
+          "template": "generic-summary-template.md",
+          "required": true
+        }
+      ]
+    }
+  },
+  "templates": {
+    "basePath": "./templates",
+    "customTemplates": {}
+  }
+}

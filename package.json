@@ -1,0 +1,49 @@
+{
+  "name": "mcp-framework-server",
+  "version": "2.0.0",
+  "description": "Generic MCP Framework Server - Configurable analysis frameworks with JSON configuration support",
+  "main": "framework-server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node framework-server.js",
+    "start:ui": "node framework-server.js config-examples/ui-analysis-config.json",
+    "start:generic": "node framework-server.js config-examples/generic-analysis-config.json",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "npx:ui": "npx mcp-framework-server config-examples/ui-analysis-config.json",
+    "npx:generic": "npx mcp-framework-server config-examples/generic-analysis-config.json"
+  },
+  "bin": {
+    "mcp-framework-server": "framework-server.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "framework",
+    "analysis",
+    "configurable",
+    "json-config",
+    "error-handling",
+    "self-evaluation",
+    "security",
+    "artifacts"
+  ],
+  "author": "ACS UI",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ACS-UI/mcp-framework-server.git"
+  },
+  "files": [
+    "framework-server.js",
+    "config-examples/",
+    "templates/",
+    "README.md",
+    "INSTALLATION_GUIDE.md"
+  ]
+}
