@@ -55,8 +55,8 @@ To use this framework as an MCP server in Cursor, add one of the following confi
     "mcp-framework-server": {
       "command": "node",
       "args": [
-        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/framework-server.js",
-        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/config-examples/ui-analysis-config.json"
+        "/path/to/mcp-framework-server/framework-server.js",
+        "/path/to/mcp-framework-server/config-examples/ui-analysis-config.json"
       ],
       "env": {}
     }
@@ -73,7 +73,7 @@ To use this framework as an MCP server in Cursor, add one of the following confi
       "command": "npx",
       "args": [
         "mcp-framework-server",
-        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/config-examples/ui-analysis-config.json"
+        "/path/to/mcp-framework-server/config-examples/ui-analysis-config.json"
       ],
       "env": {}
     }

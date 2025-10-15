@@ -14,8 +14,8 @@ Copy this configuration to your Cursor MCP settings:
     "mcp-framework-server": {
       "command": "node",
       "args": [
-        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/framework-server.js",
-        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/config-examples/ui-analysis-config.json"
+        "/path/to/mcp-framework-server/framework-server.js",
+        "/path/to/mcp-framework-server/config-examples/ui-analysis-config.json"
       ],
       "env": {}
     }
@@ -26,7 +26,7 @@ Copy this configuration to your Cursor MCP settings:
 ### 2. Update Paths
 
 Replace the paths with your actual installation paths:
-- Update `/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/` with your path
+- Update `/path/to/mcp-framework-server/` with your actual installation path
 - Or use relative paths if the server is in your project
 
 ### 3. Restart Cursor
