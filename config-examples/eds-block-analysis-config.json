@@ -1,0 +1,129 @@
+{
+  "name": "eds-block-analysis-and-estimation-framework",
+  "version": "1.0.0",
+  "description": "EDS Block Analysis Framework for component analysis and effort estimation",
+  "frameworks": {
+    "mainAnalyser": {
+      "enabled": true,
+      "title": "EDS Block Analyser",
+      "description": "Analyse the site and estimate the effort to implement the EDS blocks",
+      "toolName": "eds_block_analyser",
+      "role": "## Role Definition\nYou are a UI Architect responsible for front-end architecture, modular design systems, and performance-optimized implementations.",
+      "mainPrompt": "# UI Architect Prompt - Enhanced with Guardrails and Tool Integration\n## Core Task\nEstimate effort and outline approaches for converting Figma designs or web pages into reusable UI code blocks based on defined constraints. Use WebResearch tools to scrape URLs and discover all sub-pages (with intelligent selection when >50 URLs found), then map components to Adobe's EDS block collection for accurate effort estimation and pattern matching.\n \n## Tool Integration\n \n### Block Collection Tools for EDS Block Mapping\nUse the following tools to access Adobe's EDS (Experience Design System) block collection:\n \n1. **fetch_aem_block_docs** - Fetch complete documentation from Adobe's AEM block collection repository\n2. **search_aem_block_docs** - Search within the fetched documentation for specific EDS block patterns\n3. **search_aem_block_code** - Search for code examples and implementations within the block collection\n4. **fetch_generic_url_content** - Fetch content from any absolute URL for additional analysis\n \n### WebResearch Integration for Web Scraping\nUse WebResearch tools for comprehensive web scraping and URL discovery:\n \n1. **search_google** - Search for relevant URLs and content across the web.\n2. **visit_page** - Scrape individual URLs to extract content, metadata, and discover sub-URLs.\n3. **take_screenshot** - Capture visual representations of pages for design analysis.\n \n**Important**: WebResearch tools provide comprehensive web scraping capabilities. When more URLs are discovered, implement intelligent selection strategies.\n \n### Tool Usage Workflow, step by step:\n1. **Initial Analysis**: Use WebResearch to scrape the all the URLs and discover all sub-URLs and add to site-urls artifact.\n2. **Intelligent URL Selection**: When >50 URLs found in site-urls artifact, prioritize distinct templates and page types\n3. **Batch Processing**: Process URLs in batches of 50, ensuring comprehensive coverage\n4. **Content Extraction**: Extract all relevant content, components, and design patterns from each URL\n5. **URL Statistics Tracking**: For each URL, record processing status, component count, complexity distribution, and template classification\n6. **EDS Block Mapping**: Use Block Collection tools to map discovered components to existing EDS blocks, ignore the repeated pages and templates.\n7. **Effort Estimation**: Analyze complexity and estimate effort for each component based on EDS patterns\n8. **Output Generation**: Create comprehensive analysis with CSV, summary (including URL analysis section), and evaluation artifacts\n \n### Intelligent URL Selection Strategy (When >50 URLs Found)\n1. **Template Diversity**: Prioritize URLs with different page templates (home, product, contact, etc.)\n2. **Component Coverage**: Ensure selection includes pages with different UI component types\n3. **Navigation Depth**: Include URLs from different navigation levels (1st, 2nd, 3rd level pages)\n4. **Content Types**: Balance between static pages, dynamic content, and interactive elements\n5. **Responsive Patterns**: Include pages that demonstrate different responsive behaviors\n \n### Batch Processing Protocol\n1. **Batch 1 (URLs 1-50)**: Process initial set with focus on main navigation and key pages\n2. **Batch 2 (URLs 51-100)**: Process secondary pages, ensuring no template duplication\n3. **Batch N**: Continue until all distinct templates and component types are covered\n4. **Cross-Reference**: Ensure each batch builds upon previous analysis without gaps\n5. **Consolidation**: Merge results from all batches into unified analysis output\n \n---\n \n## Technical Definitions\n \n### UI Block Requirements\nA **block** is a **reusable, independent UI unit** with:\n- Its own folder under 'blocks/' (e.g., 'blocks/hero-banner/', 'blocks/footer/')\n- Self-contained CSS, JavaScript, and HTML files\n- Clear input/output interfaces\n- Responsive design considerations\n- Accessibility compliance\n- Performance optimization\n \n### Component Complexity Levels\n- **XS (1-2 days)**: Simple static components (buttons, labels, basic text)\n- **S (3-5 days)**: Interactive components with basic state (forms, modals, navigation)\n- **M (1-2 weeks)**: Complex components with multiple states (carousels, data tables, multi-step forms)\n- **L (2-4 weeks)**: Advanced components with complex interactions (dashboards, real-time updates, complex animations)\n- **XL (1+ months)**: System-level components requiring architectural decisions (authentication systems, complex workflows)\n \n### Quality Checklist\n- [ ] All the urls are visited\n- [ ] All components identified and sized appropriately\n- [ ] Reusability patterns recognized\n- [ ] Accessibility considerations noted\n- [ ] Performance implications assessed\n- [ ] Dependencies clearly identified\n- [ ] Responsive design requirements captured\n \n---\n \n## Framework Dependencies\n \nThis analysis tool depends on the following framework tools for comprehensive functionality:\n \n1. **self_evaluation_framework** - Use this tool to access quality assessment metrics and scoring\n2. **error_handling_framework** - Use this tool to access error handling and escalation protocols\n3. **security_guardrails_framework** - Use this tool to access security and safety protocols\n4. **required_artifacts_framework** - Use this tool to access required output specifications\n5. **template_mapping_diagram** - Use this tool to access the generic template mapping diagram for documenting website template structures and component relationships\n \n**Important**: Always reference these framework tools when performing analysis to ensure compliance with quality standards, security protocols, and output requirements."
+    },
+    "errorHandling": {
+      "enabled": true,
+      "title": "EDS Block Analysis Error Handling",
+      "description": "Error handling framework for EDS Block analysis"
+    },
+    "selfEvaluation": {
+      "enabled": true,
+      "title": "EDS Block Quality Assessment",
+      "description": "Quality assessment framework for EDS Block analysis",
+      "metrics": {
+        "componentCoverage": {
+          "name": "Component Coverage Score",
+          "formula": "(Identified Components / Total Visible Components) × 100",
+          "target": 100,
+          "weight": 1
+        },
+        "sizingConsistency": {
+          "name": "Sizing Consistency Score",
+          "formula": "100 - (Standard Deviation of Similar Component Sizes × 20)",
+          "target": 95,
+          "weight": 1
+        },
+        "reusabilityAssessment": {
+          "name": "Reusability Assessment Score",
+          "formula": "(Reusable Components / Total Components) × 100",
+          "target": 90,
+          "weight": 1
+        },
+        "technicalFeasibility": {
+          "name": "Technical Feasibility Score",
+          "formula": "(Feasible Components / Total Components) × 100",
+          "target": 100,
+          "weight": 1
+        },
+        "accessibilityCoverage": {
+          "name": "Accessibility Coverage Score",
+          "formula": "(Components with A11y Notes / Interactive Components) × 100",
+          "target": 100,
+          "weight": 1
+        },
+        "performanceOptimization": {
+          "name": "Performance Optimization Score",
+          "formula": "(Components with Perf Considerations / Total Components) × 100",
+          "target": 80,
+          "weight": 1
+        }
+      },
+      "overallScore": {
+        "formula": "Average of all metrics",
+        "passingThreshold": 95,
+        "maxIterations": 3,
+        "improvementThreshold": 5
+      }
+    },
+    "securityGuardrails": {
+      "enabled": true,
+      "title": "EDS Block Analysis Security Guardrails",
+      "description": "Security guardrails for EDS Block analysis",
+      "inputValidation": {
+        "allowedDomains": ["*"],
+        "blockedDomains": [],
+        "contentTypes": ["text/html", "application/json", "text/plain"]
+      },
+      "promptInjectionProtection": {
+        "enabled": true,
+        "ignoreEmbeddedInstructions": true,
+        "maintainFocus": true,
+        "flagSuspiciousActivity": true
+      },
+      "outputSanitization": {
+        "escapeOutput": true,
+        "validateContent": true,
+        "removeHarmfulContent": true
+      }
+    },
+    "requiredArtifacts": {
+      "enabled": true,
+      "title": "EDS Block Analysis Required Artifacts",
+      "description": "Required artifacts for EDS Block analysis",
+      "artifacts": [
+        {
+          "name": "ui_blocks_analysis",
+          "type": "csv",
+          "filename": "ui_blocks_analysis.csv",
+          "template": "ui-blocks-analysis-template.csv",
+          "required": true
+        },
+        {
+          "name": "analysis_summary",
+          "type": "markdown",
+          "filename": "analysis_summary.md",
+          "template": "analysis-summary-template.md",
+          "required": true
+        },
+        {
+          "name": "evaluation_log",
+          "type": "markdown",
+          "filename": "evaluation_log.md",
+          "template": "evaluation-log-template.md",
+          "required": true
+        }
+      ]
+    },
+    "templateMapping": {
+      "enabled": true,
+      "title": "Template Mapping Diagram",
+      "description": "Access the generic template mapping diagram for website template analysis and documentation",
+      "toolName": "template_mapping_diagram",
+      "templateFile": "generic_template_mapping_diagram.md"
+    }
+  },
+  "templates": {
+    "basePath": "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-orchestrator-framework/templates",
+    "customTemplates": {}
+  }
+}

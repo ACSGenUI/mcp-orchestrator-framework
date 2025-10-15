@@ -6,10 +6,12 @@ A generic, configurable MCP (Model Context Protocol) server that provides variou
 
 - **Configurable Frameworks**: Create custom analysis servers through JSON configuration
 - **Built-in Frameworks**: 
+  - Main Analyser Framework (configurable role and prompt)
   - Error Handling Framework
   - Self-Evaluation Framework (generic and configurable)
   - Security Guardrails Framework
   - Required Artifacts Framework
+  - Template Mapping Framework (for template diagram access)
 - **Template Support**: Use custom templates for artifact generation
 - **JSON Configuration**: Easy setup and customization
 - **Modular Design**: Enable/disable frameworks as needed
@@ -40,6 +42,46 @@ npm run start:generic
 # Use your own configuration
 node framework-server.js path/to/your-config.json
 ```
+
+## MCP Server Setup (Cursor)
+
+To use this framework as an MCP server in Cursor, add one of the following configurations to your Cursor settings:
+
+### Option 1: Using Node Command
+
+```json
+{
+  "mcpServers": {
+    "mcp-framework-server": {
+      "command": "node",
+      "args": [
+        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/framework-server.js",
+        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/config-examples/ui-analysis-config.json"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+### Option 2: Using NPX Command
+
+```json
+{
+  "mcpServers": {
+    "mcp-framework-server": {
+      "command": "npx",
+      "args": [
+        "mcp-framework-server",
+        "/Users/kalimuthua/Projects/ui-competency/mcp-framework/mcp-eds-block-analyser/config-examples/ui-analysis-config.json"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+**Note**: Update the paths in the configuration to match your local setup.
 
 ## Configuration
 
@@ -119,6 +161,23 @@ The server is configured through JSON files. Here's the structure:
 ```
 
 ## Framework Configuration
+
+### Main Analyser Framework
+
+Configurable main analyser with custom role and prompt:
+
+```json
+{
+  "mainAnalyser": {
+    "enabled": true,
+    "title": "EDS Block Analyser",
+    "description": "Analyse the site and estimate the effort to implement the EDS blocks",
+    "toolName": "eds_block_analyser",
+    "role": "## Role Definition\nYou are a UI Architect...",
+    "mainPrompt": "# UI Architect Prompt\n## Core Task\n..."
+  }
+}
+```
 
 ### Error Handling Framework
 
@@ -222,6 +281,22 @@ Define required output artifacts:
 }
 ```
 
+### Template Mapping Framework
+
+Provides access to template mapping diagrams:
+
+```json
+{
+  "templateMapping": {
+    "enabled": true,
+    "title": "Template Mapping Diagram",
+    "description": "Access the generic template mapping diagram for website template analysis",
+    "toolName": "template_mapping_diagram",
+    "templateFile": "generic_template_mapping_diagram.md"
+  }
+}
+```
+
 ## Example Configurations
 
 ### UI Analysis Configuration
@@ -268,10 +343,12 @@ node framework-server.js your-config.json
 
 The server exposes the following tools based on your configuration:
 
+- `main_analyser` (or custom tool name) - Main analysis tool with configurable role and prompt
 - `error_handling_framework` - Error handling protocols
 - `self_evaluation_framework` - Quality assessment metrics
 - `security_guardrails_framework` - Security protocols
 - `required_artifacts_framework` - Required output specifications
+- `template_mapping_diagram` (or custom tool name) - Template mapping diagram access
 
 ## Development
 

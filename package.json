@@ -6,11 +6,13 @@
   "type": "module",
   "scripts": {
     "start": "node framework-server.js",
-    "start:ui": "node framework-server.js config-examples/ui-analysis-config.json",
+    "start:ui": "node framework-server.js config-examples/ui-analysis-config-custom.json",
     "start:generic": "node framework-server.js config-examples/generic-analysis-config.json",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "npx:ui": "npx mcp-framework-server config-examples/ui-analysis-config.json",
-    "npx:generic": "npx mcp-framework-server config-examples/generic-analysis-config.json"
+    "start:eds": "node framework-server.js config-examples/eds-block-analysis-config.json",
+    "test": "node test-framework.js",
+    "npx:ui": "npx mcp-framework-server config-examples/ui-analysis-config-custom.json",
+    "npx:generic": "npx mcp-framework-server config-examples/generic-analysis-config.json",
+    "npx:eds": "npx mcp-framework-server config-examples/eds-block-analysis-config.json"
   },
   "bin": {
     "mcp-framework-server": "framework-server.js"

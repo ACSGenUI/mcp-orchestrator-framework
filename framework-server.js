@@ -27,6 +27,14 @@ class FrameworkServer {
       version: '1.0.0',
       description: 'Generic MCP Framework Server',
       frameworks: {
+        mainAnalyser: {
+          enabled: false,
+          title: 'Main Analyser',
+          description: 'Main analysis tool with configurable role and prompt',
+          toolName: 'main_analyser',
+          role: '',
+          mainPrompt: ''
+        },
         errorHandling: {
           enabled: true,
           title: 'Error Handling Framework',
@@ -129,6 +137,13 @@ class FrameworkServer {
               required: true
             }
           ]
+        },
+        templateMapping: {
+          enabled: false,
+          title: 'Template Mapping Diagram',
+          description: 'Access the generic template mapping diagram for website template analysis and documentation',
+          toolName: 'template_mapping_diagram',
+          templateFile: 'generic_template_mapping_diagram.md'
         }
       },
       templates: {
@@ -190,6 +205,11 @@ class FrameworkServer {
   }
 
   setupFrameworks() {
+    // Setup main analyser framework (if enabled)
+    if (this.config.frameworks.mainAnalyser?.enabled) {
+      this.setupMainAnalyserFramework();
+    }
+
     // Setup error handling framework
     if (this.config.frameworks.errorHandling?.enabled) {
       this.setupErrorHandlingFramework();
@@ -209,6 +229,28 @@ class FrameworkServer {
     if (this.config.frameworks.requiredArtifacts?.enabled) {
       this.setupRequiredArtifactsFramework();
     }
+
+    // Setup template mapping framework
+    if (this.config.frameworks.templateMapping?.enabled) {
+      this.setupTemplateMappingFramework();
+    }
+  }
+
+  setupMainAnalyserFramework() {
+    const framework = this.config.frameworks.mainAnalyser;
+    
+    // Combine role and main prompt
+    const mainAnalyserContent = `${framework.role}\n\n${framework.mainPrompt}`;
+
+    // Use configured tool name or default to 'main_analyser'
+    const toolName = framework.toolName || 'main_analyser';
+
+    this.server.registerTool(toolName, {
+      title: framework.title,
+      description: framework.description,
+    }, async () => ({
+      content: [{ type: "text", text: mainAnalyserContent }]
+    }));
   }
 
   setupErrorHandlingFramework() {
@@ -341,6 +383,35 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
       description: framework.description,
     }, async () => ({
       content: [{ type: "text", text: artifactsContent }]
+    }));
+  }
+
+  setupTemplateMappingFramework() {
+    const framework = this.config.frameworks.templateMapping;
+    
+    // Function to read template mapping diagram from file
+    const getTemplateMappingContent = () => {
+      try {
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = dirname(__filename);
+        const templateBasePath = this.config.templates?.basePath || './templates';
+        const templateFile = framework.templateFile || 'generic_template_mapping_diagram.md';
+        const templatePath = join(__dirname, templateBasePath, templateFile);
+        return readFileSync(templatePath, 'utf8');
+      } catch (error) {
+        console.error('Error reading template mapping diagram:', error);
+        return 'Error: Could not load template mapping diagram.';
+      }
+    };
+
+    // Use configured tool name or default to 'template_mapping_diagram'
+    const toolName = framework.toolName || 'template_mapping_diagram';
+
+    this.server.registerTool(toolName, {
+      title: framework.title,
+      description: framework.description,
+    }, async () => ({
+      content: [{ type: "text", text: getTemplateMappingContent() }]
     }));
   }
 
