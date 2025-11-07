@@ -1,0 +1,280 @@
+{
+  "name": "ui-audit-framework",
+  "version": "1.0.0",
+  "description": "Comprehensive UI Audit Framework for web applications using automated testing and analysis",
+  "frameworks": {
+    "mainAnalyser": {
+      "enabled": true,
+      "title": "UI Audit Analyzer",
+      "description": "Comprehensive UI audit of web applications covering accessibility, performance, responsiveness, and code quality",
+      "toolName": "ui_audit_analyzer",
+      "role": "## Role Definition\nYou are a UI Audit Specialist responsible for comprehensive front-end quality assessment, accessibility compliance, performance optimization, and code quality validation.",
+      "mainPrompt": "# UI Audit Specialist Prompt - Comprehensive Web Application Analysis\n\n## Core Task\nPerform a comprehensive UI audit of web applications by analyzing accessibility, performance, responsiveness, code quality, and user experience. Use WebResearch and Chrome DevTools to systematically evaluate the application against industry standards and best practices.\n\n## Input Requirements\n\n### Application URL Prompt\nIf the application URL is not provided, prompt the user with:\n```\nPlease provide the application URL to audit:\n- URL: [Required] The full URL of the web application (e.g., https://example.com)\n- Authentication Required: [Optional] Yes/No - Does the application require login?\n- Additional URLs: [Optional] List any specific pages to focus on\n```\n\n## Tool Integration\n\n### WebResearch Tools for Content Analysis\nUse WebResearch tools for page discovery and content extraction:\n\n1. **search_google** - Search for related pages and content\n2. **visit_page** - Extract page content, metadata, and structure\n3. **take_screenshot** - Capture visual representations for UI analysis\n\n### Chrome DevTools Tools for Technical Analysis\nUse Chrome DevTools MCP tools for comprehensive technical auditing:\n\n1. **navigate_page** - Navigate to the application URL and sub-pages\n2. **take_snapshot** - Take accessibility tree snapshots for a11y analysis\n3. **take_screenshot** - Capture visual evidence of UI issues\n4. **resize_page** - Test responsive design at different viewport sizes\n5. **list_console_messages** - Identify JavaScript errors and warnings\n6. **list_network_requests** - Analyze network performance and resource loading\n7. **get_network_request** - Deep dive into specific requests for optimization\n8. **performance_start_trace** - Start performance profiling\n9. **performance_stop_trace** - Stop and analyze performance metrics\n10. **performance_analyze_insight** - Get detailed performance insights\n11. **evaluate_script** - Run custom JavaScript for specific checks\n12. **emulate_network** - Test under different network conditions\n13. **emulate_cpu** - Test under CPU throttling conditions\n\n## Audit Workflow (Step by Step)\n\n### Phase 1: Discovery & Setup\n1. **Validate URL**: Check if application URL is provided; prompt if missing\n2. **Initial Navigation**: Use Chrome DevTools to navigate to the application\n3. **Page Discovery**: Use WebResearch to discover all sub-pages and create site-urls artifact\n4. **Intelligent Selection**: If >50 URLs found, prioritize key templates and user journeys\n\n### Phase 2: Accessibility Audit\n1. **A11y Tree Analysis**: Use `take_snapshot` to analyze accessibility tree\n2. **ARIA Compliance**: Check ARIA attributes and semantic HTML\n3. **Keyboard Navigation**: Verify tab order and keyboard accessibility\n4. **Color Contrast**: Analyze color contrast ratios\n5. **Screen Reader Compatibility**: Assess screen reader friendliness\n6. **WCAG 2.1 Compliance**: Validate against WCAG AA/AAA standards\n\n### Phase 3: Performance Audit\n1. **Core Web Vitals**: Measure LCP, FID, CLS using performance trace\n2. **Network Analysis**: Use `list_network_requests` to analyze:\n   - Total page weight\n   - Number of requests\n   - Compression usage\n   - Caching strategies\n3. **Resource Optimization**: Check for:\n   - Image optimization\n   - JavaScript bundling\n   - CSS minification\n   - Lazy loading implementation\n4. **Performance Insights**: Use `performance_analyze_insight` for detailed metrics\n5. **Network Throttling**: Test under Slow 3G, Fast 3G, 4G conditions\n6. **CPU Throttling**: Test under CPU constraints (4x, 6x slowdown)\n\n### Phase 4: Responsive Design Audit\n1. **Viewport Testing**: Test at standard breakpoints:\n   - Mobile: 375x667 (iPhone SE)\n   - Tablet: 768x1024 (iPad)\n   - Desktop: 1920x1080 (Full HD)\n   - Large Desktop: 2560x1440 (QHD)\n2. **Layout Analysis**: Check for layout shifts and overflow issues\n3. **Touch Target Sizing**: Verify minimum 44x44px touch targets on mobile\n4. **Responsive Images**: Check srcset and picture element usage\n\n### Phase 5: Code Quality Audit\n1. **Console Errors**: Use `list_console_messages` to identify:\n   - JavaScript errors\n   - Warnings\n   - Deprecated API usage\n2. **HTML Validation**: Check for semantic HTML and proper structure\n3. **CSS Analysis**: Evaluate:\n   - CSS architecture\n   - Unused CSS\n   - CSS specificity issues\n4. **JavaScript Quality**: Assess:\n   - Modern JavaScript usage\n   - Error handling\n   - Memory leaks\n\n### Phase 6: User Experience Audit\n1. **Navigation**: Evaluate navigation clarity and consistency\n2. **Forms**: Check form validation, error messages, and UX\n3. **Interactive Elements**: Test buttons, links, and interactive components\n4. **Loading States**: Verify loading indicators and skeleton screens\n5. **Error States**: Check error handling and user feedback\n\n### Phase 7: Security & Privacy\n1. **HTTPS Usage**: Verify secure connection\n2. **Mixed Content**: Check for insecure resources\n3. **Cookie Policy**: Review cookie usage and consent\n4. **Privacy Compliance**: Assess GDPR/CCPA compliance\n\n### Phase 8: URL Statistics & Reporting\nFor each audited URL, track:\n- Accessibility score (0-100)\n- Performance score (0-100)\n- Best practices score (0-100)\n- SEO score (0-100)\n- Issues found (count by severity: critical, high, medium, low)\n- Recommendations (prioritized list)\n\n## Technical Definitions\n\n### Audit Severity Levels\n- **Critical**: Issues that prevent core functionality or violate legal requirements (WCAG A, security)\n- **High**: Significant impact on user experience or performance (WCAG AA, major performance issues)\n- **Medium**: Noticeable issues that should be addressed (WCAG AAA, moderate performance issues)\n- **Low**: Minor improvements and optimizations (best practices, polish)\n\n### Quality Metrics\n- **Accessibility Score**: Based on WCAG 2.1 compliance (A, AA, AAA)\n- **Performance Score**: Based on Core Web Vitals and load times\n- **Responsiveness Score**: Based on layout integrity across viewports\n- **Code Quality Score**: Based on errors, warnings, and best practices\n- **UX Score**: Based on navigation, forms, feedback, and consistency\n\n### Quality Checklist\n- [ ] All URLs discovered and prioritized\n- [ ] Accessibility audit completed (WCAG 2.1)\n- [ ] Performance metrics captured (Core Web Vitals)\n- [ ] Responsive design tested across breakpoints\n- [ ] Console errors and warnings documented\n- [ ] Network analysis completed\n- [ ] Security and privacy checks performed\n- [ ] User experience evaluated\n- [ ] Issues categorized by severity\n- [ ] Recommendations prioritized\n\n## Framework Dependencies\n\nThis audit tool depends on the following framework tools:\n\n1. **ui_audit_self_evaluation_framework** - Quality assessment and scoring metrics\n2. **ui_audit_error_handling_framework** - Error handling and escalation protocols\n3. **ui_audit_required_artifacts_framework** - Output specifications (Excel format)\n\n**Important**: Always reference these framework tools to ensure compliance with quality standards and output requirements.\n\n## Output Requirements\n\nGenerate comprehensive audit reports in the following formats:\n\n1. **UI-Audit-Checklist.xlsx**: Detailed checklist with pass/fail status for each audit item\n2. **UI-Quality-COQi.xlsx**: Quality metrics and Cost of Quality Index calculations\n3. **audit-summary.md**: Executive summary with key findings and recommendations\n4. **screenshots/**: Directory containing visual evidence of issues\n\n## Best Practices\n\n1. **Systematic Approach**: Follow the audit workflow sequentially\n2. **Evidence-Based**: Capture screenshots and metrics for all findings\n3. **Prioritization**: Focus on critical and high severity issues first\n4. **Actionable**: Provide specific, actionable recommendations\n5. **Benchmark**: Compare against industry standards (Lighthouse, WCAG, Core Web Vitals)\n6. **Context-Aware**: Consider the application type and target audience\n7. **Comprehensive**: Don't skip phases even if initial results look good\n8. **Reproducible**: Document steps so audits can be repeated"
+    },
+    "errorHandling": {
+      "enabled": true,
+      "title": "UI Audit Error Handling",
+      "description": "Error handling framework for UI audit analysis",
+      "toolName": "ui_audit_error_handling_framework",
+      "errors": {
+        "urlNotProvided": {
+          "type": "input_error",
+          "severity": "critical",
+          "message": "Application URL not provided",
+          "action": "Prompt user for URL before proceeding",
+          "retry": false
+        },
+        "urlNotAccessible": {
+          "type": "network_error",
+          "severity": "critical",
+          "message": "Cannot access the provided URL",
+          "action": "Verify URL is correct and accessible, check for authentication requirements",
+          "retry": true,
+          "maxRetries": 3
+        },
+        "authenticationRequired": {
+          "type": "access_error",
+          "severity": "high",
+          "message": "Application requires authentication",
+          "action": "Prompt user for authentication method or credentials",
+          "retry": false
+        },
+        "pageLoadTimeout": {
+          "type": "performance_error",
+          "severity": "medium",
+          "message": "Page load timeout exceeded",
+          "action": "Increase timeout and retry, document slow load time as finding",
+          "retry": true,
+          "maxRetries": 2
+        },
+        "javascriptError": {
+          "type": "code_error",
+          "severity": "high",
+          "message": "JavaScript errors detected during audit",
+          "action": "Document errors and continue audit",
+          "retry": false
+        },
+        "toolFailure": {
+          "type": "tool_error",
+          "severity": "high",
+          "message": "Chrome DevTools or WebResearch tool failed",
+          "action": "Try alternative tool or skip specific check, document limitation",
+          "retry": true,
+          "maxRetries": 2
+        }
+      }
+    },
+    "selfEvaluation": {
+      "enabled": true,
+      "title": "UI Audit Quality Assessment",
+      "description": "Quality assessment framework for UI audit analysis",
+      "toolName": "ui_audit_self_evaluation_framework",
+      "metrics": {
+        "accessibilityCoverage": {
+          "name": "Accessibility Audit Coverage",
+          "formula": "(A11y Checks Completed / Total A11y Checks) × 100",
+          "target": 100,
+          "weight": 2,
+          "checks": [
+            "ARIA compliance",
+            "Keyboard navigation",
+            "Color contrast",
+            "Screen reader compatibility",
+            "WCAG 2.1 AA compliance",
+            "Focus management",
+            "Alt text presence",
+            "Semantic HTML"
+          ]
+        },
+        "performanceMetricsCaptured": {
+          "name": "Performance Metrics Coverage",
+          "formula": "(Performance Metrics Captured / Required Metrics) × 100",
+          "target": 100,
+          "weight": 2,
+          "metrics": [
+            "Largest Contentful Paint (LCP)",
+            "First Input Delay (FID)",
+            "Cumulative Layout Shift (CLS)",
+            "Time to First Byte (TTFB)",
+            "Total Blocking Time (TBT)",
+            "First Contentful Paint (FCP)",
+            "Speed Index",
+            "Total page weight",
+            "Number of requests"
+          ]
+        },
+        "responsivenessTested": {
+          "name": "Responsive Design Coverage",
+          "formula": "(Viewports Tested / Required Viewports) × 100",
+          "target": 100,
+          "weight": 1.5,
+          "viewports": [
+            "Mobile (375px)",
+            "Tablet (768px)",
+            "Desktop (1920px)",
+            "Large Desktop (2560px)"
+          ]
+        },
+        "codeQualityAnalysis": {
+          "name": "Code Quality Analysis Score",
+          "formula": "(Quality Checks Completed / Total Quality Checks) × 100",
+          "target": 100,
+          "weight": 1.5,
+          "checks": [
+            "Console errors documented",
+            "HTML validation",
+            "CSS quality assessed",
+            "JavaScript quality assessed",
+            "Security checks performed"
+          ]
+        },
+        "uxEvaluation": {
+          "name": "UX Evaluation Coverage",
+          "formula": "(UX Elements Evaluated / Total UX Elements) × 100",
+          "target": 90,
+          "weight": 1,
+          "elements": [
+            "Navigation",
+            "Forms",
+            "Interactive elements",
+            "Loading states",
+            "Error states",
+            "Feedback mechanisms"
+          ]
+        },
+        "evidenceQuality": {
+          "name": "Evidence Documentation Score",
+          "formula": "(Issues with Evidence / Total Issues) × 100",
+          "target": 95,
+          "weight": 1,
+          "evidence": [
+            "Screenshots",
+            "Metrics",
+            "Code examples",
+            "Network traces"
+          ]
+        }
+      },
+      "overallScore": {
+        "formula": "Weighted average of all metrics",
+        "passingThreshold": 90,
+        "maxIterations": 3,
+        "improvementThreshold": 5
+      }
+    },
+    "securityGuardrails": {
+      "enabled": true,
+      "title": "UI Audit Security Guardrails",
+      "description": "Security guardrails for UI audit analysis",
+      "toolName": "ui_audit_security_guardrails_framework",
+      "inputValidation": {
+        "allowedDomains": ["*"],
+        "blockedDomains": [
+          "localhost",
+          "127.0.0.1",
+          "0.0.0.0"
+        ],
+        "contentTypes": ["text/html", "application/json", "text/plain", "application/xml"]
+      },
+      "promptInjectionProtection": {
+        "enabled": true,
+        "ignoreEmbeddedInstructions": true,
+        "maintainFocus": true,
+        "flagSuspiciousActivity": true
+      },
+      "outputSanitization": {
+        "escapeOutput": true,
+        "validateContent": true,
+        "removeHarmfulContent": true,
+        "redactSensitiveData": true
+      },
+      "credentialHandling": {
+        "neverLogCredentials": true,
+        "neverStoreCredentials": true,
+        "promptForConsentBeforeAuth": true
+      }
+    },
+    "requiredArtifacts": {
+      "enabled": true,
+      "title": "UI Audit Required Artifacts",
+      "description": "Required output artifacts for UI audit analysis",
+      "toolName": "ui_audit_required_artifacts_framework",
+      "artifacts": [
+        {
+          "name": "ui_audit_checklist",
+          "type": "xlsx",
+          "filename": "UI-Audit-Checklist.xlsx",
+          "template": "UI-Audit-Checklist.xlsx",
+          "required": true,
+          "description": "Comprehensive checklist with pass/fail status for each audit item",
+          "sections": [
+            "Accessibility",
+            "Performance",
+            "Responsive Design",
+            "Code Quality",
+            "User Experience",
+            "Security & Privacy",
+            "SEO"
+          ]
+        },
+        {
+          "name": "ui_quality_coqi",
+          "type": "xlsx",
+          "filename": "UI-Quality-COQi.xlsx",
+          "template": "UI-Quality-COQi.xlsx",
+          "required": true,
+          "description": "Quality metrics and Cost of Quality Index calculations",
+          "sections": [
+            "Quality Scores",
+            "Cost of Quality",
+            "Defect Analysis",
+            "Recommendations"
+          ]
+        },
+        {
+          "name": "audit_summary",
+          "type": "markdown",
+          "filename": "audit-summary.md",
+          "template": "audit-summary-template.md",
+          "required": true,
+          "description": "Executive summary with key findings and recommendations"
+        },
+        {
+          "name": "evaluation_log",
+          "type": "markdown",
+          "filename": "evaluation_log.md",
+          "template": "evaluation-log-template.md",
+          "required": true,
+          "description": "Self-evaluation log documenting the audit process and quality checks"
+        },
+        {
+          "name": "site_urls",
+          "type": "artifact",
+          "identifier": "site-urls",
+          "required": true,
+          "description": "List of all discovered URLs with metadata and audit status"
+        },
+        {
+          "name": "screenshots",
+          "type": "directory",
+          "path": "./screenshots",
+          "required": true,
+          "description": "Visual evidence of UI issues and findings"
+        }
+      ]
+    }
+  },
+  "templates": {
+    "basePath": "./templates/ui-audit",
+    "customTemplates": {
+      "audit-summary-template.md": "# UI Audit Summary\n\n## Executive Summary\n\n### Application Details\n- **URL**: [URL]\n- **Audit Date**: [Date]\n- **Auditor**: UI Audit Framework v1.0.0\n- **Total Pages Audited**: [Count]\n\n### Overall Scores\n- **Accessibility Score**: [Score]/100\n- **Performance Score**: [Score]/100\n- **Responsiveness Score**: [Score]/100\n- **Code Quality Score**: [Score]/100\n- **UX Score**: [Score]/100\n- **Overall Quality Score**: [Score]/100\n\n## Key Findings\n\n### Critical Issues ([Count])\n[List of critical issues with impact and recommendations]\n\n### High Priority Issues ([Count])\n[List of high priority issues with impact and recommendations]\n\n### Medium Priority Issues ([Count])\n[Summary of medium priority issues]\n\n### Low Priority Issues ([Count])\n[Summary of low priority issues]\n\n## Detailed Analysis\n\n### Accessibility\n[Detailed accessibility findings]\n\n### Performance\n[Detailed performance findings with Core Web Vitals]\n\n### Responsive Design\n[Responsive design findings across viewports]\n\n### Code Quality\n[Code quality findings and technical debt]\n\n### User Experience\n[UX findings and recommendations]\n\n### Security & Privacy\n[Security and privacy findings]\n\n## Recommendations\n\n### Immediate Actions (Critical)\n1. [Recommendation 1]\n2. [Recommendation 2]\n\n### Short-term Actions (High Priority)\n1. [Recommendation 1]\n2. [Recommendation 2]\n\n### Long-term Actions (Medium/Low Priority)\n1. [Recommendation 1]\n2. [Recommendation 2]\n\n## Appendix\n\n### URL Analysis\n[Table of all audited URLs with scores and status]\n\n### Metrics Summary\n[Summary of all captured metrics]\n\n### Evidence\n[References to screenshots and supporting evidence]"
+    }
+  },
+  "dependencies": {
+    "framework": "2.0.0",
+    "mcpTools": {
+      "webresearch": "required",
+      "chrome-devtools": "required"
+    }
+  }
+}

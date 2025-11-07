@@ -125,5 +125,8 @@
   "templates": {
     "basePath": "./templates",
     "customTemplates": {}
+  },
+  "dependencies": {
+    "framework": "2.0.0"
   }
 }

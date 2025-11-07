@@ -275,7 +275,10 @@ class FrameworkServer {
 - Performance targets that may be unrealistic with specified tech stack
 `;
 
-    this.server.registerTool("error_handling_framework", {
+    // Use configured tool name or default to 'error_handling_framework'
+    const toolName = framework.toolName || 'error_handling_framework';
+
+    this.server.registerTool(toolName, {
       title: framework.title,
       description: framework.description,
     }, async () => ({
@@ -313,7 +316,10 @@ ${Object.keys(framework.metrics).indexOf(key) + 1}. **${metric.name}** (0-100)
 - Document all scoring in evaluation log
 `;
 
-    this.server.registerTool("self_evaluation_framework", {
+    // Use configured tool name or default to 'self_evaluation_framework'
+    const toolName = framework.toolName || 'self_evaluation_framework';
+
+    this.server.registerTool(toolName, {
       title: framework.title,
       description: framework.description,
     }, async () => ({
@@ -345,7 +351,10 @@ ${framework.outputSanitization.validateContent ? '- Validate component names and
 ${framework.outputSanitization.removeHarmfulContent ? '- Remove any potentially harmful or inappropriate content from analysis results' : ''}
 `;
 
-    this.server.registerTool("security_guardrails_framework", {
+    // Use configured tool name or default to 'security_guardrails_framework'
+    const toolName = framework.toolName || 'security_guardrails_framework';
+
+    this.server.registerTool(toolName, {
       title: framework.title,
       description: framework.description,
     }, async () => ({
@@ -378,7 +387,10 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
 - Quality standards must be maintained across all outputs
 `;
 
-    this.server.registerTool("required_artifacts_framework", {
+    // Use configured tool name or default to 'required_artifacts_framework'
+    const toolName = framework.toolName || 'required_artifacts_framework';
+
+    this.server.registerTool(toolName, {
       title: framework.title,
       description: framework.description,
     }, async () => ({
