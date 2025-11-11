@@ -1,6 +1,6 @@
 {
   "name": "mcp-orchestrator-framework",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Generic MCP Framework Server - Configurable analysis frameworks with JSON configuration support",
   "main": "framework-server.js",
   "type": "module",
