@@ -4,6 +4,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import https from 'https';
+import http from 'http';
 
 /**
  * Generic MCP Framework Server
@@ -15,12 +17,39 @@ import { dirname, join } from 'path';
 
 class FrameworkServer {
   constructor(configPath = null) {
-    this.config = this.loadConfiguration(configPath);
+    this.configPath = configPath;
+  }
+
+  async initialize() {
+    this.config = await this.loadConfiguration(this.configPath);
     this.server = this.createServer();
     this.setupFrameworks();
   }
 
-  loadConfiguration(configPath) {
+  async fetchFromUrl(url) {
+    return new Promise((resolve, reject) => {
+      const protocol = url.startsWith('https') ? https : http;
+      protocol.get(url, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => resolve(data));
+      }).on('error', reject);
+    });
+  }
+
+  isUrl(path) {
+    return path && (path.startsWith('http://') || path.startsWith('https://'));
+  }
+
+  convertGithubUrl(url) {
+    // Convert GitHub blob URLs to raw content URLs
+    if (url.includes('github.com') && url.includes('/blob/')) {
+      return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+    }
+    return url;
+  }
+
+  async loadConfiguration(configPath) {
     // Default configuration
     const defaultConfig = {
       name: 'generic-framework-server',
@@ -152,13 +181,28 @@ class FrameworkServer {
       }
     };
 
-    if (configPath && existsSync(configPath)) {
+    if (configPath) {
       try {
-        const customConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+        let configContent;
+        
+        if (this.isUrl(configPath)) {
+          // Handle URL (including GitHub URLs)
+          const url = this.convertGithubUrl(configPath);
+          console.error(`Fetching config from URL: ${url}`);
+          configContent = await this.fetchFromUrl(url);
+        } else if (existsSync(configPath)) {
+          // Handle local file
+          console.error(`Loading config from file: ${configPath}`);
+          configContent = readFileSync(configPath, 'utf8');
+        } else {
+          throw new Error(`Config path not found: ${configPath}`);
+        }
+        
+        const customConfig = JSON.parse(configContent);
         return this.mergeConfigurations(defaultConfig, customConfig);
       } catch (error) {
         console.error('Error loading configuration:', error);
-        console.log('Using default configuration');
+        console.error('Using default configuration');
       }
     }
 
@@ -434,6 +478,14 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
 }
 
 // Main execution
-const configPath = process.argv[2] || null;
-const frameworkServer = new FrameworkServer(configPath);
-await frameworkServer.start();
+async function main() {
+  const configPath = process.argv[2] || null;
+  const frameworkServer = new FrameworkServer(configPath);
+  await frameworkServer.initialize();
+  await frameworkServer.start();
+}
+
+main().catch(error => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});
