@@ -387,8 +387,8 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
 - Quality standards must be maintained across all outputs
 `;
 
-    // Use configured tool name or default to 'required_output_artifacts_framework'
-    const toolName = framework.toolName || 'required_output_artifacts_framework';
+    // Use configured tool name or default to 'required_output_artifacts'
+    const toolName = framework.toolName || 'required_output_artifacts';
 
     this.server.registerTool(toolName, {
       title: framework.title,
