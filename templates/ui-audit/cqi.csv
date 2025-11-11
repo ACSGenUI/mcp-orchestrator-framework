@@ -1,0 +1,39 @@
+Category,Areas,Detailed Weightage,Score
+Best practices - 20% ,Project set up   ,Yes,0
+Best practices - 20% ,Naming conventions,,
+Best practices - 20% ,W3 validations,,
+Best practices - 20% ,"Linting tools ( with respective styleguide/configurations)",,
+Best practices - 20% ,Precommits,,
+,,,
+Code Quality - 25 %,"Fallbacks for fonts, default states",,0
+Code Quality - 25 %,"UI component patterns ( Usage of Image, etc.,)",,
+Code Quality - 25 %,Design patterns,,
+Code Quality - 25 %,No hardcoding of text,,
+Code Quality - 25 %,"Optimise the network calls ( reduce or abort the calls upon respective actions)",,
+Code Quality - 25 %,Security - basic encryptions (optional) ,,
+,,,
+"RMS( Reusability, maintainability, Scalability) - 25% ",Compliance to AEM principles,,0
+"RMS( Reusability, maintainability, Scalability) - 25% ",Separation of concerns ( Creating components with view vs logic separation),,
+"RMS( Reusability, maintainability, Scalability) - 25% ",Responsiveness,,
+"RMS( Reusability, maintainability, Scalability) - 25% ",Logging,,
+"RMS( Reusability, maintainability, Scalability) - 25% ",Fallbacks for failures (Fault tolerance),,
+"RMS( Reusability, maintainability, Scalability) - 25% ",Versioning (optional),,
+"RMS( Reusability, maintainability, Scalability) - 25% ",Unit test (optional),,
+,,,
+Deployment and build optimization - 15%,Default bundle configuration clean up,,0
+Deployment and build optimization - 15%,Pollyfills considerations,,
+Deployment and build optimization - 15%,Optimise and Minimize bundle size,,
+,,,
+Accessibility - 15% ,Lighthouse tool - AA standard,,0
+Accessibility - 15% ,AAA standard (optional),,
+,,,
+Overall Summary,,,
+,,,
+Key Observations,,,
+,,,
+Recommendations,,,
+,,,
+COQi,,,
+,,,
+RAG Status,,,
+

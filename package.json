@@ -1,5 +1,5 @@
 {
-  "name": "mcp-framework-server",
+  "name": "mcp-orchestrator-framework",
   "version": "2.0.0",
   "description": "Generic MCP Framework Server - Configurable analysis frameworks with JSON configuration support",
   "main": "framework-server.js",
@@ -10,12 +10,12 @@
     "start:generic": "node framework-server.js config-examples/generic-analysis-config.json",
     "start:eds": "node framework-server.js config-examples/eds-block-analysis-config.json",
     "test": "node test-framework.js",
-    "npx:ui": "npx mcp-framework-server config-examples/ui-analysis-config-custom.json",
-    "npx:generic": "npx mcp-framework-server config-examples/generic-analysis-config.json",
-    "npx:eds": "npx mcp-framework-server config-examples/eds-block-analysis-config.json"
+    "npx:ui": "npx mcp-orchestrator-framework config-examples/ui-analysis-config-custom.json",
+    "npx:generic": "npx mcp-orchestrator-framework config-examples/generic-analysis-config.json",
+    "npx:eds": "npx mcp-orchestrator-framework config-examples/eds-block-analysis-config.json"
   },
   "bin": {
-    "mcp-framework-server": "framework-server.js"
+    "mcp-orchestrator-framework": "framework-server.js"
   },
   "keywords": [
     "mcp",
@@ -39,13 +39,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ACS-UI/mcp-framework-server.git"
+    "url": "git+https://github.com/ACS-UI/mcp-orchestrator-framework.git"
   },
   "files": [
     "framework-server.js",
     "config-examples/",
     "templates/",
-    "README.md",
-    "INSTALLATION_GUIDE.md"
+    "README.md"
   ]
 }

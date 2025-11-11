@@ -1,4 +1,4 @@
-# MCP Framework Server
+# MCP Orchestrator Framework
 
 A generic, configurable MCP (Model Context Protocol) server that provides various analysis frameworks through JSON configuration. This server can be customized to create different types of analysis tools by simply changing the configuration file.
 
@@ -19,7 +19,7 @@ A generic, configurable MCP (Model Context Protocol) server that provides variou
 ## Installation
 
 ```bash
-npm install mcp-framework-server
+npm install mcp-orchestrator-framework
 ```
 
 ## Quick Start
@@ -52,11 +52,11 @@ To use this framework as an MCP server in Cursor, add one of the following confi
 ```json
 {
   "mcpServers": {
-    "mcp-framework-server": {
+    "mcp-orchestrator-framework": {
       "command": "node",
       "args": [
-        "/path/to/mcp-framework-server/framework-server.js",
-        "/path/to/mcp-framework-server/config-examples/ui-analysis-config.json"
+        "/path/to/mcp-orchestrator-framework/framework-server.js",
+        "/path/to/mcp-orchestrator-framework/config-examples/ui-analysis-config.json"
       ],
       "env": {}
     }
@@ -69,11 +69,11 @@ To use this framework as an MCP server in Cursor, add one of the following confi
 ```json
 {
   "mcpServers": {
-    "mcp-framework-server": {
+    "mcp-orchestrator-framework": {
       "command": "npx",
       "args": [
-        "mcp-framework-server",
-        "/path/to/mcp-framework-server/config-examples/ui-analysis-config.json"
+        "mcp-orchestrator-framework",
+        "/path/to/mcp-orchestrator-framework/config-examples/ui-analysis-config.json"
       ],
       "env": {}
     }
