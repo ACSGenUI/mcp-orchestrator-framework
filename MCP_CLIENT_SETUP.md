@@ -130,7 +130,7 @@ Once configured, you'll have access to these tools:
 - **`error_handling_framework`** - Error handling protocols and guidelines
 - **`self_evaluation_framework`** - Quality assessment metrics and scoring
 - **`security_guardrails_framework`** - Security protocols and validation
-- **`required_artifacts_framework`** - Required output specifications and templates
+- **`required_output_artifacts_framework`** - Required output specifications and templates
 
 ## Testing Your Setup
 

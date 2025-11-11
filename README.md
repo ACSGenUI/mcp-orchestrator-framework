@@ -10,7 +10,7 @@ A generic, configurable MCP (Model Context Protocol) server that provides variou
   - Error Handling Framework
   - Self-Evaluation Framework (generic and configurable)
   - Security Guardrails Framework
-  - Required Artifacts Framework
+  - Required Output Artifacts Framework
   - Template Mapping Framework (for template diagram access)
 - **Template Support**: Use custom templates for artifact generation
 - **JSON Configuration**: Easy setup and customization
@@ -138,9 +138,9 @@ The server is configured through JSON files. Here's the structure:
         "removeHarmfulContent": true
       }
     },
-    "requiredArtifacts": {
+    "requiredOutputArtifacts": {
       "enabled": true,
-      "title": "Required Artifacts",
+      "title": "Required Output Artifacts",
       "description": "Required output artifacts",
       "artifacts": [
         {
@@ -251,15 +251,15 @@ Configurable security protocols:
 }
 ```
 
-### Required Artifacts Framework
+### Required Output Artifacts Framework
 
 Define required output artifacts:
 
 ```json
 {
-  "requiredArtifacts": {
+  "requiredOutputArtifacts": {
     "enabled": true,
-    "title": "Required Artifacts",
+    "title": "Required Output Artifacts",
     "description": "Required output artifacts",
     "artifacts": [
       {
@@ -347,7 +347,7 @@ The server exposes the following tools based on your configuration:
 - `error_handling_framework` - Error handling protocols
 - `self_evaluation_framework` - Quality assessment metrics
 - `security_guardrails_framework` - Security protocols
-- `required_artifacts_framework` - Required output specifications
+- `required_output_artifacts_framework` - Required output specifications
 - `template_mapping_diagram` (or custom tool name) - Template mapping diagram access
 
 ## Development

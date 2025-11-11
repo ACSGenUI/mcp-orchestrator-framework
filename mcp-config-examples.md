@@ -161,7 +161,7 @@ Once configured, the server will expose these tools based on your configuration:
 - `error_handling_framework` - Error handling protocols
 - `self_evaluation_framework` - Quality assessment metrics  
 - `security_guardrails_framework` - Security protocols
-- `required_artifacts_framework` - Required output specifications
+- `required_output_artifacts_framework` - Required output specifications
 
 ## Path Examples
 

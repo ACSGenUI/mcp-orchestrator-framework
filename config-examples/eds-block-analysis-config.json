@@ -86,10 +86,10 @@
         "removeHarmfulContent": true
       }
     },
-    "requiredArtifacts": {
+    "requiredOutputArtifacts": {
       "enabled": true,
-      "title": "EDS Block Analysis Required Artifacts",
-      "description": "Required artifacts for EDS Block analysis",
+      "title": "EDS Block Analysis Required Output Artifacts",
+      "description": "Required output artifacts for EDS Block analysis",
       "artifacts": [
         {
           "name": "ui_blocks_analysis",

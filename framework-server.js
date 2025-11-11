@@ -110,10 +110,10 @@ class FrameworkServer {
             removeHarmfulContent: true
           }
         },
-        requiredArtifacts: {
+        requiredOutputArtifacts: {
           enabled: true,
-          title: 'Required Artifacts Framework',
-          description: 'Access the framework for required artifacts output',
+          title: 'Required Output Artifacts Framework',
+          description: 'Access the framework for required output artifacts',
           artifacts: [
             {
               name: 'analysis_data',
@@ -225,9 +225,9 @@ class FrameworkServer {
       this.setupSecurityGuardrailsFramework();
     }
 
-    // Setup required artifacts framework
-    if (this.config.frameworks.requiredArtifacts?.enabled) {
-      this.setupRequiredArtifactsFramework();
+    // Setup required output artifacts framework
+    if (this.config.frameworks.requiredOutputArtifacts?.enabled) {
+      this.setupRequiredOutputArtifactsFramework();
     }
 
     // Setup template mapping framework
@@ -362,8 +362,8 @@ ${framework.outputSanitization.removeHarmfulContent ? '- Remove any potentially 
     }));
   }
 
-  setupRequiredArtifactsFramework() {
-    const framework = this.config.frameworks.requiredArtifacts;
+  setupRequiredOutputArtifactsFramework() {
+    const framework = this.config.frameworks.requiredOutputArtifacts;
     
     let artifactsContent = `
 ## Required Artifacts Output
@@ -387,8 +387,8 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
 - Quality standards must be maintained across all outputs
 `;
 
-    // Use configured tool name or default to 'required_artifacts_framework'
-    const toolName = framework.toolName || 'required_artifacts_framework';
+    // Use configured tool name or default to 'required_output_artifacts_framework'
+    const toolName = framework.toolName || 'required_output_artifacts_framework';
 
     this.server.registerTool(toolName, {
       title: framework.title,
