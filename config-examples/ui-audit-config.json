@@ -75,7 +75,7 @@
           "formula": "(Checklist Items Evaluated / Total Items) × 100",
           "target": 100,
           "weight": 3,
-          "description": "All 222 checklist items must be evaluated"
+          "description": "All checklist items must be evaluated"
         },
         "accessibilityCoverage": {
           "name": "Accessibility Audit Coverage",
@@ -193,30 +193,19 @@
           "templatePath": "templates/ui-audit/EDS_Audit_Checklist 1.csv",
           "required": true,
           "strictTemplateAdherence": true,
-          "description": "AEM EDS audit checklist (222 items across 8 phases). Populate ONLY the last 2 columns.",
-          "columnsToPo pulate": {
-            "column7": {
-              "name": "Implemented? (Yes / No / NA)",
-              "allowedValues": ["Yes", "No", "Partial", "Manual Review Needed"],
-              "instruction": "Select the most appropriate value based on audit findings"
-            },
-            "column8": {
-              "name": "Comments",
-              "instruction": "Provide specific observations, findings, metrics, or evidence. Be factual and objective. NO recommendations."
-            }
-          },
+          "description": "AEM EDS audit checklist. Populate ONLY the last 2 columns.",
           "dynamicBehavior": {
             "loadTemplate": true,
-            "extractColumns": "Parse CSV header row (8 columns total)",
-            "extractRows": "Read all 222 checklist items",
+            "extractColumns": "Parse CSV header row",
+            "extractRows": "Read all checklist items",
             "preserveStructure": "Maintain exact column order, row order, and all template rows",
-            "fillStrategy": "Fill ONLY columns 7 and 8. Do NOT modify columns 1-6."
+            "fillStrategy": "Fill ONLY Implemented? and Comments columns."
           },
           "contentGuidelines": {
             "implementedColumn": "Use ONLY: Yes, No, Partial, Manual Review Needed",
             "commentsColumn": "Add observations, findings, metrics, evidence. NO recommendations.",
             "preserveAllRows": "Do NOT delete or skip any rows",
-            "preserveFirstSixColumns": "Do NOT modify Solution, Phase, Category, Sub Category, Item, Priority columns"
+            "preserveFirstSixColumns": "Do NOT modify other columns"
           }
         },
         {
@@ -251,17 +240,6 @@
             "maintainFormatting": "Keep exact markdown formatting",
             "issueFormat": "For each issue: Description and Impact only. NO Recommendation field."
           }
-        },
-        {
-          "name": "screenshots",
-          "type": "directory",
-          "path": "./screenshots",
-          "required": false,
-          "description": "Visual evidence of UI issues (optional)",
-          "contentGuidelines": {
-            "namingConvention": "issue-{priority}-{number}-{description}.png",
-            "organization": "Group by priority or issue type"
-          }
         }
       ]
     }
@@ -270,7 +248,7 @@
     "basePath": "./templates/ui-audit",
     "customTemplates": {
       "ui-audit-summary-template.md": "Comprehensive UI Audit Summary Report template",
-      "EDS_Audit_Checklist 1.csv": "AEM EDS Audit Checklist with 222 items across 8 project phases"
+      "EDS_Audit_Checklist 1.csv": "AEM EDS Audit Checklist"
     }
   },
   "dependencies": {
