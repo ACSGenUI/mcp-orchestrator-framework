@@ -490,7 +490,7 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
       
       // Skip if this URI is already registered
       if (registeredUris.has(uri)) {
-        console.error(`Skipping duplicate template registration: ${uri}`);
+        // Silently skip duplicates - this is expected behavior
         return;
       }
       

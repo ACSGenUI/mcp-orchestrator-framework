@@ -246,10 +246,7 @@
   },
   "templates": {
     "basePath": "./templates/ui-audit",
-    "customTemplates": {
-      "ui-audit-summary-template.md": "Comprehensive UI Audit Summary Report template",
-      "EDS_Audit_Checklist.csv": "AEM EDS Audit Checklist"
-    }
+    "customTemplates": {}
   },
   "dependencies": {
     "framework": "2.0.0",
