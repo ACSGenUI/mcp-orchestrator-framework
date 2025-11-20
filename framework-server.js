@@ -243,6 +243,7 @@ class FrameworkServer {
       {
         capabilities: {
           tools: {},
+          resources: {},
         },
       }
     );
@@ -278,6 +279,9 @@ class FrameworkServer {
     if (this.config.frameworks.templateMapping?.enabled) {
       this.setupTemplateMappingFramework();
     }
+
+    // Setup template resources
+    this.setupTemplateResources();
   }
 
   setupMainAnalyserFramework() {
@@ -469,6 +473,102 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
     }, async () => ({
       content: [{ type: "text", text: getTemplateMappingContent() }]
     }));
+  }
+
+  setupTemplateResources() {
+    // Collect all template references from the configuration
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const templateBasePath = this.config.templates?.basePath || './templates';
+    
+    // Track registered URIs to avoid duplicates
+    const registeredUris = new Set();
+
+    // Helper function to register a template resource
+    const registerTemplate = (name, relativePath, absolutePath, description) => {
+      const uri = `template:///${relativePath}`;
+      
+      // Skip if this URI is already registered
+      if (registeredUris.has(uri)) {
+        console.error(`Skipping duplicate template registration: ${uri}`);
+        return;
+      }
+      
+      const mimeType = this.getMimeType(name);
+      
+      this.server.resource(
+        name,
+        uri,
+        {
+          description: description,
+          mimeType: mimeType
+        },
+        async (uri) => {
+          try {
+            const content = readFileSync(absolutePath, 'utf8');
+            return {
+              contents: [{
+                uri: uri.toString(),
+                mimeType: mimeType,
+                text: content
+              }]
+            };
+          } catch (error) {
+            console.error(`Error reading template ${absolutePath}:`, error);
+            throw new Error(`Failed to read template: ${error.message}`);
+          }
+        }
+      );
+      
+      // Mark this URI as registered
+      registeredUris.add(uri);
+    };
+
+    // Add templates from customTemplates section
+    if (this.config.templates?.customTemplates) {
+      Object.entries(this.config.templates.customTemplates).forEach(([filename, description]) => {
+        const relativePath = templateBasePath.replace(/^\.\//, '') + '/' + filename;
+        const absolutePath = join(__dirname, templateBasePath, filename);
+        registerTemplate(filename, relativePath, absolutePath, description);
+      });
+    }
+
+    // Add templates from requiredOutputArtifacts
+    if (this.config.frameworks.requiredOutputArtifacts?.artifacts) {
+      this.config.frameworks.requiredOutputArtifacts.artifacts.forEach(artifact => {
+        if (artifact.templatePath) {
+          const filename = artifact.templatePath.split('/').pop();
+          const absolutePath = join(__dirname, artifact.templatePath);
+          registerTemplate(filename, artifact.templatePath, absolutePath, `Template for ${artifact.name}`);
+        } else if (artifact.template) {
+          // Fallback to template name if templatePath not specified
+          const relativePath = templateBasePath.replace(/^\.\//, '') + '/' + artifact.template;
+          const absolutePath = join(__dirname, templateBasePath, artifact.template);
+          registerTemplate(artifact.template, relativePath, absolutePath, `Template for ${artifact.name}`);
+        }
+      });
+    }
+
+    // Add template mapping diagram if enabled
+    if (this.config.frameworks.templateMapping?.enabled) {
+      const framework = this.config.frameworks.templateMapping;
+      const templateFile = framework.templateFile || 'generic_template_mapping_diagram.md';
+      const relativePath = templateBasePath.replace(/^\.\//, '') + '/' + templateFile;
+      const absolutePath = join(__dirname, templateBasePath, templateFile);
+      registerTemplate(templateFile, relativePath, absolutePath, framework.description || 'Template mapping diagram');
+    }
+  }
+
+  getMimeType(filename) {
+    const extension = filename.split('.').pop().toLowerCase();
+    const mimeTypes = {
+      'md': 'text/markdown',
+      'csv': 'text/csv',
+      'json': 'application/json',
+      'txt': 'text/plain',
+      'html': 'text/html'
+    };
+    return mimeTypes[extension] || 'text/plain';
   }
 
   async start() {
