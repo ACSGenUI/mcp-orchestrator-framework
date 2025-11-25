@@ -1,0 +1,3 @@
+"Component Name","Source Location","Variant/State","Props or Inputs","Instances Found","Usage Status","EDS Block Alignment","Drift Flag","Drift Type","Evidence / Notes"
+"Example: Card","src/components/Card.tsx","Default","title, description, ctaText","14","Active","hero-card","No","N/A","Document real component data per row; do not delete header."
+

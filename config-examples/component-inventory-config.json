@@ -1,0 +1,156 @@
+{
+  "name": "component-inventory-framework",
+  "version": "1.0.0",
+  "description": "Catalog reusable UI components, detect drift against Adobe EDS guidelines, and surface unused or duplicate implementations.",
+  "frameworks": {
+    "mainAnalyser": {
+      "enabled": true,
+      "title": "Component Inventory & Drift Monitor",
+      "description": "Crawls source repositories (and optional deployed URLs) to enumerate reusable UI components, their variants, prop signatures, usage frequency, and alignment with EDS block contracts.",
+      "toolName": "inventory_monitor",
+      "role": "## Role Definition\\nYou are a Design Systems Auditor tasked with maintaining a single source of truth for reusable UI components. You ensure implementations remain consistent with Adobe EDS blocks, highlight duplication, and surface unused or drifting components before they increase maintenance cost.",
+      "mainPrompt": "1. Discover target codebase paths (and optional deployed URLs) from user input or repo metadata. 2. Parse component directories, Storybook stories, and relevant imports to capture component metadata (name, file path, variants/states, prop signatures, usage count, owning product area). 3. Flag drift by comparing props and behavior against the closest Adobe EDS block contract (use existing EDS documentation where available). 4. Identify duplicates (multiple components serving same purpose), unused components (no references/build artifacts), and any missing EDS mapping. 5. Load 'templates/component-inventory/component-inventory-report-template.csv' and populate every row with factual findings only in the provided columns. Do not add new columns. Preserve header order. Save the completed artifact as 'component-inventory-report.csv'."
+    },
+    "errorHandling": {
+      "enabled": true,
+      "title": "Component Inventory Error Handling",
+      "description": "Standard error handling for repository scanning and drift detection",
+      "toolName": "inventory_error_framework",
+      "errors": {
+        "repoNotProvided": {
+          "type": "input_error",
+          "severity": "critical",
+          "message": "Repository path or URL not provided",
+          "action": "Prompt user to supply repo path or deployed URL before continuing",
+          "retry": false
+        },
+        "repoScanFailed": {
+          "type": "tool_error",
+          "severity": "high",
+          "message": "Unable to parse repository structure or run static analysis",
+          "action": "Log failure reason, attempt alternative scanning strategy once",
+          "retry": true,
+          "maxRetries": 1
+        },
+        "urlNotAccessible": {
+          "type": "network_error",
+          "severity": "medium",
+          "message": "Cannot access the provided deployed URL",
+          "action": "Verify URL or authentication needs, skip URL scan if inaccessible and note limitation",
+          "retry": true,
+          "maxRetries": 2
+        }
+      }
+    },
+    "selfEvaluation": {
+      "enabled": true,
+      "title": "Component Inventory Quality Assessment",
+      "description": "Quality metrics for inventory completeness and drift accuracy",
+      "toolName": "inventory_self_eval",
+      "metrics": {
+        "coverageScore": {
+          "name": "Component Coverage",
+          "formula": "(Documented Components / Detected Components) × 100",
+          "target": 100,
+          "weight": 2,
+          "description": "Every detected component must have a corresponding inventory entry."
+        },
+        "driftDetection": {
+          "name": "Drift Detection Accuracy",
+          "formula": "(Confirmed Drift Findings / Reported Drift Findings) × 100",
+          "target": 95,
+          "weight": 1.5
+        },
+        "duplicationSignal": {
+          "name": "Duplicate Coverage",
+          "formula": "(Duplicate Families Flagged / Total Duplicate Families) × 100",
+          "target": 90,
+          "weight": 1
+        },
+        "edsAlignment": {
+          "name": "EDS Alignment Mapping",
+          "formula": "(Components Mapped to EDS / Total Components) × 100",
+          "target": 90,
+          "weight": 1
+        },
+        "evidenceQuality": {
+          "name": "Evidence Quality",
+          "formula": "(Entries with Source Path + Notes / Total Entries) × 100",
+          "target": 100,
+          "weight": 0.5
+        }
+      },
+      "overallScore": {
+        "formula": "Weighted average of all metrics",
+        "passingThreshold": 92,
+        "maxIterations": 2,
+        "improvementThreshold": 4
+      }
+    },
+    "securityGuardrails": {
+      "enabled": true,
+      "title": "Component Inventory Security Guardrails",
+      "description": "Protect source code and credential safety during analysis",
+      "toolName": "inventory_security_guard",
+      "inputValidation": {
+        "allowedDomains": ["*"],
+        "blockedDomains": ["localhost", "127.0.0.1"],
+        "contentTypes": ["text/plain", "application/json", "text/html"]
+      },
+      "promptInjectionProtection": {
+        "enabled": true,
+        "ignoreEmbeddedInstructions": true,
+        "maintainFocus": true,
+        "flagSuspiciousActivity": true
+      },
+      "outputSanitization": {
+        "escapeOutput": true,
+        "validateContent": true,
+        "removeHarmfulContent": true,
+        "redactSensitiveData": true
+      },
+      "credentialHandling": {
+        "neverLogCredentials": true,
+        "neverStoreCredentials": true,
+        "promptForConsentBeforeAuth": true
+      }
+    },
+    "requiredOutputArtifacts": {
+      "enabled": true,
+      "title": "Component Inventory Required Artifacts",
+      "description": "Artifacts that must be produced after each run",
+      "toolName": "inventory_output_artifacts",
+      "artifacts": [
+        {
+          "name": "component_inventory_report",
+          "type": "csv",
+          "filename": "component-inventory-report.csv",
+          "template": "component-inventory-report-template.csv",
+          "templatePath": "templates/component-inventory/component-inventory-report-template.csv",
+          "required": true,
+          "strictTemplateAdherence": true,
+          "contentGuidelines": {
+            "preserveHeader": "Do not rename or reorder columns.",
+            "oneRowPerComponent": "Each component, variant, or drift scenario gets its own row.",
+            "evidenceOnly": "Notes column must contain factual evidence (file path, prop signature, metric).",
+            "noRecommendations": "Avoid prescriptive remediation steps; focus on observations."
+          }
+        }
+      ]
+    }
+  },
+  "templates": {
+    "basePath": "./templates/component-inventory",
+    "customTemplates": {}
+  },
+  "dependencies": {
+    "framework": "1.0.0",
+    "mcpTools": {
+      "codebase_search": "recommended",
+      "chrome-devtools": "optional",
+      "webresearch": "optional"
+    }
+  }
+}
+
+
