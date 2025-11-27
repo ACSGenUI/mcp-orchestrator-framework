@@ -1,0 +1,27 @@
+{
+  "reportTitle": "UI Audit Issues & Performance Summary",
+  "targetUrlOrRepo": "",
+  "generatedOn": "",
+  "keyIssues": [
+    {
+      "id": "ISSUE-001",
+      "category": "Accessibility | Performance | Responsiveness | Code Quality",
+      "description": "",
+      "impact": "",
+      "evidence": ""
+    }
+  ],
+  "performanceMetrics": {
+    "largestContentfulPaint": "",
+    "firstInputDelay": "",
+    "cumulativeLayoutShift": "",
+    "timeToFirstByte": "",
+    "firstContentfulPaint": "",
+    "totalBlockingTime": "",
+    "speedIndex": "",
+    "totalPageWeightKB": "",
+    "requestCount": ""
+  },
+  "notes": "Use factual observations only. Do not add remediation guidance."
+}
+

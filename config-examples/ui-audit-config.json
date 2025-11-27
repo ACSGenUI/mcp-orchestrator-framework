@@ -240,6 +240,21 @@
             "maintainFormatting": "Keep exact markdown formatting",
             "issueFormat": "For each issue: Description and Impact only. NO Recommendation field."
           }
+        },
+        {
+          "name": "issues_metrics_json",
+          "type": "json",
+          "filename": "ui-audit-issues-metrics.json",
+          "template": "ui-audit-issues-metrics-template.json",
+          "templatePath": "templates/ui-audit/ui-audit-issues-metrics-template.json",
+          "required": true,
+          "strictTemplateAdherence": true,
+          "description": "JSON export that captures key issues plus core performance metrics for the audited target.",
+          "contentGuidelines": {
+            "keyIssues": "List only factual findings with description, impact, and evidence.",
+            "performanceMetrics": "All metric fields must be populated with measured values or 'N/A' when data is unavailable.",
+            "noRecommendations": "Do not include remediation steps or prescriptive guidance."
+          }
         }
       ]
     }
