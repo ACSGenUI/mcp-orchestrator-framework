@@ -10,6 +10,7 @@
     "start:generic": "node framework-server.js config-examples/generic-analysis-config.json",
     "start:eds": "node framework-server.js config-examples/eds-block-analysis-config.json",
     "test": "node test-framework.js",
+    "setup:mcp": "node scripts/setup-mcp.js",
     "npx:ui": "npx mcp-orchestrator-framework config-examples/ui-analysis-config-custom.json",
     "npx:generic": "npx mcp-orchestrator-framework config-examples/generic-analysis-config.json",
     "npx:eds": "npx mcp-orchestrator-framework config-examples/eds-block-analysis-config.json"
