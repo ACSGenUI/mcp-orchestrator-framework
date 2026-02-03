@@ -19,7 +19,7 @@
           "requiredInputs": ["applicationUrl"]
         }
       },
-      "mainPrompt": "STEP 0: Determine the audit mode. If applicationUrl is provided, run BOTH URL-based audit (webresearch, chrome-devtools, W3C validator, Lighthouse/Axe) and code-based audit (eslint/stylelint/static analysis). If only codebasePath is provided, run code-based audit. Merge evidence from all runs. STEP 1: Load 'templates/ui-audit/EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. Use MCP tools (eslint, stylelint, W3C validator, Lighthouse/Axe, chrome-devtools) to automate checks. Use Manual Review Needed only when no automated validation is possible; otherwise answer Yes/No/Partial with a brief justification in Comments. Do NOT change other columns. Keep all rows. Save as 'UI-Audit-Checklist.csv'. STEP 2: Load 'templates/ui-audit/ui-audit-summary-template.md' and fill all sections using the checklist. Preserve the template structure and do not add or remove sections."
+      "mainPrompt": "STEP 0: Determine the audit mode. If applicationUrl is provided, run BOTH URL-based audit (webresearch, chrome-devtools, W3C validator, Lighthouse/Axe) and code-based audit (eslint/stylelint/static analysis). If only codebasePath is provided, run code-based audit. Merge evidence from all runs. STEP 1: Load 'templates/ui-audit/EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. For rows where Tool Supported = Yes, you MUST use the listed tool and return Yes/No/Partial with evidence; do NOT mark Manual Review Needed unless the tool cannot run or provides no signal. Run project-configured eslint/stylelint CLI commands directly (not MCP) to find issues. Use MCP tools for W3C validator, Lighthouse/Axe, and chrome-devtools. Use Manual Review Needed only when no automated validation is possible; otherwise answer Yes/No/Partial with a brief justification in Comments. Do NOT change other columns. Keep all rows. Save as 'UI-Audit-Checklist.csv'. STEP 2: Load 'templates/ui-audit/ui-audit-summary-template.md' and fill all sections using the checklist. Preserve the template structure and do not add or remove sections."
     },
     "errorHandling": {
       "enabled": true,
@@ -212,7 +212,7 @@
             "fillStrategy": "Fill ONLY Implemented? and Comments columns."
           },
           "contentGuidelines": {
-            "implementedColumn": "Use ONLY: Yes, No, Partial, Manual Review Needed. Prefer Yes/No/Partial using tool evidence; use Manual Review Needed only when no automated validation is possible.",
+            "implementedColumn": "Use ONLY: Yes, No, Partial, Manual Review Needed. If Tool Supported = Yes, use the tool and return Yes/No/Partial. Manual Review Needed only when the tool cannot run or provides no usable signal.",
             "commentsColumn": "Add observations, findings, metrics, evidence and brief tool-based justification. NO recommendations.",
             "preserveAllRows": "Do NOT delete or skip any rows",
             "preserveFirstSixColumns": "Do NOT modify other columns"
@@ -263,8 +263,6 @@
     "mcpTools": {
       "webresearch": "required",
       "chrome-devtools": "required",
-      "eslint": "required",
-      "stylelint": "required",
       "w3c-validator": "required"
     }
   }
