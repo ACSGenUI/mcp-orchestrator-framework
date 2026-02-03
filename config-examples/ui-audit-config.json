@@ -9,7 +9,7 @@
       "description": "Comprehensive UI audit of web applications covering accessibility, performance, responsiveness, and code quality",
       "toolName": "ui_audit_analyzer",
       "role": "## Role Definition\nYou are a UI Audit Specialist responsible for comprehensive front-end quality assessment, accessibility compliance, performance optimization, and code quality validation.",
-      "mainPrompt": "STEP 1: Load 'templates/ui-audit/EDS_Audit_Checklist.csv'. Fill ONLY columns (Implemented: Yes/No/Partial/Manual Review Needed) and (Comments). Do NOT change other columns. Keep all the rows. Save as 'UI-Audit-Checklist.csv'. STEP 2: Load 'templates/ui-audit/ui-audit-summary-template.md' and fill all sections strictly following the template structure using findings from the checklist. Do not rename or remove any sections. Populate all placeholders, tables, and summaries based on the completed checklist. Do not create new sections or subsections."
+      "mainPrompt": "STEP 1: Load 'templates/ui-audit/EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. Use MCP tools (eslint, stylelint, W3C validator, Lighthouse/Axe, chrome-devtools) to automate checks. Use Manual Review Needed only when no automated validation is possible; otherwise answer Yes/No/Partial with a brief justification in Comments. Do NOT change other columns. Keep all rows. Save as 'UI-Audit-Checklist.csv'. STEP 2: Load 'templates/ui-audit/ui-audit-summary-template.md' and fill all sections using the checklist. Preserve the template structure and do not add or remove sections."
     },
     "errorHandling": {
       "enabled": true,
@@ -202,8 +202,8 @@
             "fillStrategy": "Fill ONLY Implemented? and Comments columns."
           },
           "contentGuidelines": {
-            "implementedColumn": "Use ONLY: Yes, No, Partial, Manual Review Needed",
-            "commentsColumn": "Add observations, findings, metrics, evidence. NO recommendations.",
+            "implementedColumn": "Use ONLY: Yes, No, Partial, Manual Review Needed. Prefer Yes/No/Partial using tool evidence; use Manual Review Needed only when no automated validation is possible.",
+            "commentsColumn": "Add observations, findings, metrics, evidence and brief tool-based justification. NO recommendations.",
             "preserveAllRows": "Do NOT delete or skip any rows",
             "preserveFirstSixColumns": "Do NOT modify other columns"
           }
@@ -252,7 +252,10 @@
     "framework": "2.0.0",
     "mcpTools": {
       "webresearch": "required",
-      "chrome-devtools": "required"
+      "chrome-devtools": "required",
+      "eslint": "required",
+      "stylelint": "required",
+      "w3c-validator": "required"
     }
   }
 }
