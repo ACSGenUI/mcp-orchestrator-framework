@@ -19,7 +19,7 @@
           "requiredInputs": ["applicationUrl"]
         }
       },
-      "mainPrompt": "STEP 0: Determine the audit mode. If applicationUrl is provided, run BOTH URL-based audit (webresearch, chrome-devtools, W3C validator, Lighthouse/Axe) and code-based audit (eslint/stylelint/static analysis). If only codebasePath is provided, run code-based audit. Merge evidence from all runs. STEP 1: Execute all implied audits directly. Never defer work or recommend another audit. Do NOT output phrases like \"Requires audit\", \"Cannot determine\", \"Requires Lighthouse audit\", \"Requires CSS audit\", or \"Requires code audit\". Simulate Lighthouse, Axe, ESLint, Stylelint, HTML Validator, and Performance audits internally when tool data is unavailable, and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence. STEP 2: Use resource 'EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. For rows where Tool Supported = Yes, you MUST use the listed tool and return Yes/No/Partial with evidence; do NOT mark Manual Review Needed unless the tool cannot run or provides no signal. Run project-configured eslint/stylelint CLI commands directly (not MCP) to find issues. Use MCP tools for W3C validator, Lighthouse/Axe, and chrome-devtools. Use Manual Review Needed only when no automated validation is possible; otherwise answer Yes/No/Partial with a brief justification in Comments. Do NOT change other columns. Keep all rows. Save as 'UI-Audit-Checklist.csv'. STEP 3: Use resource 'metrics.csv'. Populate the value column for every key using scores, counts, and findings from the audit. Preserve all keys and row order. Save as 'UI-Audit-Metrics.csv'. STEP 4: Use resource 'ui-audit-summary-template.md' and fill all sections using the checklist. Preserve the template structure and do not add or remove sections."
+      "mainPrompt": "STEP 0: Determine the audit mode. If applicationUrl is provided, run BOTH URL-based audit (webresearch, chrome-devtools, W3C validator, Lighthouse/Axe) and code-based audit (eslint/stylelint/static analysis). If only codebasePath is provided, run code-based audit. Merge evidence from all runs. STEP 1: Execute all implied audits directly. Never defer work or recommend another audit. Do NOT output phrases like \"Requires audit\", \"Cannot determine\", \"Requires Lighthouse audit\", \"Requires CSS audit\", or \"Requires code audit\". Simulate Lighthouse, Axe, ESLint, Stylelint, HTML Validator, and Performance audits internally when tool data is unavailable, and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence. STEP 2: Use resource 'EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. For rows where Tool Supported = Yes, you MUST use the listed tool and return Yes/No/Partial with evidence; do NOT mark Manual Review Needed unless the tool cannot run or provides no signal. Run project-configured eslint/stylelint CLI commands directly (not MCP) to find issues. Use MCP tools for W3C validator, Lighthouse/Axe, and chrome-devtools. Use Manual Review Needed only when no automated validation is possible; otherwise answer Yes/No/Partial with a brief justification in Comments. Do NOT change other columns. Keep all rows. Save as 'UI-Audit-Checklist.csv'. STEP 3: Call the 'ui_audit_manual_checklist' tool to collect manual review input from the reviewer. This tool will present checklist items category-by-category via elicitation forms and return the reviewer's responses. The tool reads the manual checklist template, groups items by category, and elicits Pass/Fail/NA status and comments for each category. Save the completed manual checklist as 'UI-Audit-Manual-Checklist.csv'. STEP 4: Use resource 'metrics.csv'. Populate the value column for every key using scores, counts, and findings from the audit. Preserve all keys and row order. Save as 'UI-Audit-Metrics.csv'. STEP 5: Use resource 'ui-audit-summary-template.md' and fill all sections using BOTH the automated checklist AND the manual checklist findings. Preserve the template structure and do not add or remove sections."
     },
     "errorHandling": {
       "enabled": true,
@@ -151,6 +151,21 @@
         "improvementThreshold": 5
       }
     },
+    "manualAudit": {
+      "enabled": true,
+      "title": "Manual Audit Checklist",
+      "description": "Collect manual review input from the reviewer for checklist items that cannot be automated. Reads the manual checklist CSV, groups items by category, and uses elicitation to collect Pass/Fail/NA status and reviewer comments for each category.",
+      "toolName": "ui_audit_manual_checklist",
+      "templatePath": "templates/ui-audit/manual_audit_checklists.csv",
+      "elicitation": {
+        "groupBy": "Category",
+        "statusField": "Status (Pass / Fail / NA)",
+        "commentsField": "Reviewer Comments",
+        "statusOptions": ["Pass", "Fail", "NA"],
+        "messagePrefix": "Manual Review Required",
+        "skipCategories": []
+      }
+    },
     "securityGuardrails": {
       "enabled": true,
       "title": "UI Audit Security Guardrails",
@@ -237,7 +252,31 @@
           "contentGuidelines": {
             "valueColumn": "Populate with numeric scores, counts, percentages, or descriptive values derived from the audit. Use empty string only when the metric is genuinely not applicable.",
             "preserveAllRows": "Do NOT delete or skip any rows",
-            "preserveKeyColumn": "Do NOT modify the key column"
+            "preserveKeyColumn": "Do NOT modify the key column",
+            "ragRating": "For overallStatus.ragRating, compute the overall project RAG status as: Green if uiQualityScore >= 80 AND no critical failures; Amber if uiQualityScore >= 60 OR critical failures <= 2; Red if uiQualityScore < 60 OR critical failures > 2. Value must be exactly one of: Red, Amber, Green."
+          }
+        },
+        {
+          "name": "manual_audit_checklist",
+          "type": "csv",
+          "filename": "UI-Audit-Manual-Checklist.csv",
+          "template": "manual_audit_checklists.csv",
+          "templatePath": "templates/ui-audit/manual_audit_checklists.csv",
+          "required": true,
+          "strictTemplateAdherence": true,
+          "description": "Manual audit checklist populated via reviewer elicitation. Status and Comments filled by the reviewer through interactive forms.",
+          "dynamicBehavior": {
+            "loadTemplate": true,
+            "extractColumns": "Parse CSV header row",
+            "extractRows": "Read all checklist items",
+            "preserveStructure": "Maintain exact column order, row order, and all template rows",
+            "fillStrategy": "Fill ONLY Status (Pass / Fail / NA) and Reviewer Comments columns via elicitation responses."
+          },
+          "contentGuidelines": {
+            "statusColumn": "Use ONLY: Pass, Fail, NA. Values come from reviewer elicitation responses.",
+            "commentsColumn": "Reviewer's observations and comments from elicitation. Preserve exactly as entered.",
+            "preserveAllRows": "Do NOT delete or skip any rows",
+            "preserveOtherColumns": "Do NOT modify Phase, Category, Sub-Category, Checklist Item, Severity, Review Type, or Mandatory columns"
           }
         },
         {

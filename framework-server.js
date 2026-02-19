@@ -275,6 +275,11 @@ class FrameworkServer {
       this.setupRequiredOutputArtifactsFramework();
     }
 
+    // Setup manual audit framework (elicitation-based)
+    if (this.config.frameworks.manualAudit?.enabled) {
+      this.setupManualAuditFramework();
+    }
+
     // Setup template mapping framework
     if (this.config.frameworks.templateMapping?.enabled) {
       this.setupTemplateMappingFramework();
@@ -444,6 +449,174 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
     }, async () => ({
       content: [{ type: "text", text: artifactsContent }]
     }));
+  }
+
+  parseCSV(csvContent) {
+    const lines = csvContent.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return { headers: [], rows: [] };
+    
+    const parseCSVLine = (line) => {
+      const fields = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          fields.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      fields.push(current.trim());
+      return fields;
+    };
+
+    const headers = parseCSVLine(lines[0]);
+    const rows = lines.slice(1).map(line => {
+      const values = parseCSVLine(line);
+      const row = {};
+      headers.forEach((header, i) => { row[header] = values[i] || ''; });
+      return row;
+    });
+    return { headers, rows };
+  }
+
+  setupManualAuditFramework() {
+    const framework = this.config.frameworks.manualAudit;
+    const elicitConfig = framework.elicitation || {};
+    const groupByField = elicitConfig.groupBy || 'Category';
+    const statusField = elicitConfig.statusField || 'Status (Pass / Fail / NA)';
+    const commentsField = elicitConfig.commentsField || 'Reviewer Comments';
+    const statusOptions = elicitConfig.statusOptions || ['Pass', 'Fail', 'NA'];
+    const skipCategories = elicitConfig.skipCategories || [];
+    const messagePrefix = elicitConfig.messagePrefix || 'Manual Review Required';
+    const toolName = framework.toolName || 'manual_audit_checklist';
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+
+    const loadChecklist = () => {
+      const templatePath = framework.templatePath
+        ? join(__dirname, framework.templatePath)
+        : null;
+      if (!templatePath || !existsSync(templatePath)) {
+        throw new Error(`Manual audit template not found: ${framework.templatePath}`);
+      }
+      return readFileSync(templatePath, 'utf8');
+    };
+
+    const lowLevelServer = this.server.server;
+
+    this.server.registerTool(toolName, {
+      title: framework.title,
+      description: framework.description,
+    }, async () => {
+      const csvContent = loadChecklist();
+      const { headers, rows } = this.parseCSV(csvContent);
+
+      const categories = {};
+      for (const row of rows) {
+        const category = row[groupByField] || 'Uncategorized';
+        if (skipCategories.includes(category)) continue;
+        if (!categories[category]) categories[category] = [];
+        categories[category].push(row);
+      }
+
+      const results = [];
+
+      for (const [category, items] of Object.entries(categories)) {
+        const schemaProperties = {};
+        const requiredFields = [];
+        const itemDescriptions = [];
+
+        items.forEach((item, idx) => {
+          const checklistItem = item['Checklist Item'] || item['Sub-Category'] || `Item ${idx + 1}`;
+          const severity = item['Severity'] || '';
+          const truncated = checklistItem.length > 80
+            ? checklistItem.substring(0, 80) + '...'
+            : checklistItem;
+
+          const statusKey = `item_${idx}_status`;
+          const commentsKey = `item_${idx}_comments`;
+
+          schemaProperties[statusKey] = {
+            type: 'string',
+            enum: statusOptions,
+            title: `[${severity}] ${truncated}`,
+            description: checklistItem
+          };
+          schemaProperties[commentsKey] = {
+            type: 'string',
+            title: `Comments for item ${idx + 1}`,
+            description: `Your observations for: ${truncated}`
+          };
+          requiredFields.push(statusKey);
+          itemDescriptions.push({ idx, checklistItem, severity, item });
+        });
+
+        try {
+          const elicitResult = await lowLevelServer.elicitInput({
+            message: `${messagePrefix}: ${category} (${items.length} items)\n\nPlease review each item and provide Pass/Fail/NA status with optional comments.`,
+            requestedSchema: {
+              type: 'object',
+              properties: schemaProperties,
+              required: requiredFields
+            }
+          });
+
+          if (elicitResult.action === 'accept' && elicitResult.content) {
+            for (const { idx, item } of itemDescriptions) {
+              const status = elicitResult.content[`item_${idx}_status`] || '';
+              const comments = elicitResult.content[`item_${idx}_comments`] || '';
+              results.push({ ...item, [statusField]: status, [commentsField]: comments });
+            }
+          } else if (elicitResult.action === 'decline') {
+            for (const { item } of itemDescriptions) {
+              results.push({ ...item, [statusField]: 'NA', [commentsField]: 'Reviewer declined this category' });
+            }
+          } else {
+            for (const { item } of itemDescriptions) {
+              results.push({ ...item, [statusField]: '', [commentsField]: 'Review cancelled by user' });
+            }
+          }
+        } catch (error) {
+          console.error(`Elicitation failed for category "${category}":`, error.message);
+          for (const { item } of itemDescriptions) {
+            results.push({
+              ...item,
+              [statusField]: '',
+              [commentsField]: `Elicitation unavailable: ${error.message}`
+            });
+          }
+        }
+      }
+
+      const escapeCSV = (val) => {
+        const str = String(val || '');
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+      const csvHeader = headers.join(',');
+      const csvRows = results.map(row => headers.map(h => escapeCSV(row[h])).join(','));
+      const completedCSV = [csvHeader, ...csvRows].join('\n');
+
+      return {
+        content: [{
+          type: 'text',
+          text: `## Manual Audit Checklist - Completed\n\nCollected responses for ${results.length} items across ${Object.keys(categories).length} categories.\n\n\`\`\`csv\n${completedCSV}\n\`\`\``
+        }]
+      };
+    });
   }
 
   setupTemplateMappingFramework() {
