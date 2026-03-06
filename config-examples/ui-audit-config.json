@@ -11,7 +11,7 @@
       "role": "## Role Definition\nYou are a UI Audit Specialist responsible for comprehensive front-end quality assessment, accessibility compliance, performance optimization, and code quality validation.",
       "inputModes": {
         "codebase": {
-          "description": "Audit using the provided codebase/repo files.",
+          "description": "Audit using the provided codebase/repo/workspace files.",
           "requiredInputs": ["codebasePath"]
         },
         "url": {
