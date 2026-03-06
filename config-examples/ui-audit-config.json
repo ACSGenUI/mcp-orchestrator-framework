@@ -152,7 +152,7 @@
       }
     },
     "manualAudit": {
-      "enabled": true,
+      "enabled": false,
       "title": "Manual Audit Checklist",
       "description": "Collect manual review input from the reviewer for checklist items that cannot be automated. Reads the manual checklist CSV, groups items by category, and uses elicitation to collect Pass/Fail/NA status and reviewer comments for each category.",
       "toolName": "ui_audit_manual_checklist",
