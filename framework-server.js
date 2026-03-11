@@ -312,12 +312,28 @@ class FrameworkServer {
   }
 
   /**
+   * Substitutes {{name}} and ${name} in text with values from args.
+   */
+  substitutePromptArgs(text, args) {
+    if (!text || typeof text !== 'string' || !args || typeof args !== 'object') return text;
+    let out = text;
+    for (const [key, value] of Object.entries(args)) {
+      if (value == null) continue;
+      const str = String(value);
+      out = out.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), str);
+      out = out.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), str);
+    }
+    return out;
+  }
+
+  /**
    * Registers MCP prompts from configuration. Each prompt in config.prompts can have:
    * - name (required): prompt identifier
    * - title (optional): display title
    * - description (optional): short description
    * - message (optional): single user message text (used if messages not provided)
    * - messages (optional): array of { role: "user"|"assistant", content: { type: "text", text: "..." } }
+   * - arguments (optional): array of { name, description?, required? } for user inputs; message/messages support {{name}} and ${name} substitution
    */
   setupPrompts() {
     const prompts = this.config.prompts || [];
@@ -326,6 +342,16 @@ class FrameworkServer {
       if (!name || typeof name !== 'string') continue;
       const title = p.title;
       const description = p.description || '';
+      const argDefs = Array.isArray(p.arguments) ? p.arguments : [];
+      const argsSchema = argDefs.length > 0
+        ? Object.fromEntries(
+            argDefs.map((a) => [
+              a.name,
+              a.required !== false ? z.string() : z.string().optional()
+            ])
+          )
+        : undefined;
+
       let messageList;
       if (Array.isArray(p.messages) && p.messages.length > 0) {
         messageList = p.messages.map((m) => ({
@@ -337,11 +363,23 @@ class FrameworkServer {
         messageList = text ? [{ role: 'user', content: { type: 'text', text } }] : [];
       }
       if (messageList.length === 0) continue;
-      const config = { title, description };
-      this.server.registerPrompt(name, config, async () => ({
-        description: description || undefined,
-        messages: messageList
-      }));
+
+      const config = { title, description, argsSchema };
+      const hasArgs = argsSchema && Object.keys(argsSchema).length > 0;
+      this.server.registerPrompt(name, config, async (...invokeArgs) => {
+        const args = hasArgs ? (invokeArgs[0] || {}) : {};
+        const substituted = messageList.map((msg) => ({
+          ...msg,
+          content: {
+            type: 'text',
+            text: this.substitutePromptArgs(msg.content.text, args)
+          }
+        }));
+        return {
+          description: description || undefined,
+          messages: substituted
+        };
+      });
     }
   }
 

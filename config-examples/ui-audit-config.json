@@ -164,7 +164,7 @@
       "title": "Manual Audit Checklist",
       "description": "Collect manual review input from the reviewer for checklist items that cannot be automated. Reads the manual checklist CSV, groups items by category, and uses elicitation to collect Pass/Fail/NA status and reviewer comments for each category.",
       "toolName": "ui_audit_manual_checklist",
-      "templatePath": "templates/ui-audit/manual_audit_checklists.csv",
+      "templatePath": "audit/manual_audit_checklists.csv",
       "elicitation": {
         "groupBy": "Category",
         "statusField": "Status (Pass / Fail / NA)",
@@ -282,7 +282,7 @@
           "type": "csv",
           "filename": "UI-Audit-Manual-Checklist.csv",
           "template": "manual_audit_checklists.csv",
-          "templatePath": "templates/ui-audit/manual_audit_checklists.csv",
+          "templatePath": "audit/manual_audit_checklists.csv",
           "required": true,
           "strictTemplateAdherence": true,
           "description": "Manual audit checklist uploaded by user at audit start. Use as immutable input and validate structure; do not regenerate.",
@@ -353,8 +353,25 @@
     {
       "name": "ui_audit_analyser",
       "title": "UI Audit Analysis Starter",
-      "description": "Starter prompt for UI audit analysis",
-      "message": "perform ui audit for this codebase. output to ui-audit-v1. app url: ${site_url} . also use audit/manual_audit_checklists.csv  already filled manual checklist while generating the reports, metrics etc"
+      "description": "Starter prompt for UI audit analysis. Provide site_url when invoking.",
+      "arguments": [
+        {
+          "name": "site_url",
+          "description": "Application URL to audit",
+          "required": true
+        },
+        {
+          "name": "manual_audit_checklist",
+          "description": "Manual audit checklist to use when generating the reports, metrics, and other artifacts",
+          "required": true
+        },
+        {
+          "name": "output_directory",
+          "description": "Output directory to use when generating the reports, metrics, and other artifacts",
+          "required": true
+        }
+      ],
+      "message": "Perform UI audit for this codebase. Output directory: {{output_directory}}. App URL: {{site_url}}. Use the already-filled manual checklist at {{manual_audit_checklist}} when generating the reports, metrics, and other artifacts."
     }
   ],
   "dependencies": {
