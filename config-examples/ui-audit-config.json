@@ -349,6 +349,14 @@
     "basePath": "./templates",
     "customTemplates": {}
   },
+  "prompts": [
+    {
+      "name": "ui_audit_analyser",
+      "title": "UI Audit Analysis Starter",
+      "description": "Starter prompt for UI audit analysis",
+      "message": "perform ui audit for this codebase. output to ui-audit-v1. app url: ${site_url} . also use audit/manual_audit_checklists.csv  already filled manual checklist while generating the reports, metrics etc"
+    }
+  ],
   "dependencies": {
     "framework": "2.0.0",
     "mcpTools": {
