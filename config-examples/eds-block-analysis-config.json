@@ -126,6 +126,14 @@
     "basePath": "./templates",
     "customTemplates": {}
   },
+  "prompts": [
+    {
+      "name": "eds_analyser",
+      "title": "EDS Block Analysis Starter",
+      "description": "Starter prompt for EDS block analysis",
+      "message": "Analyse the provided URL(s) for EDS block implementation. Use the eds_block_analyser and framework tools to produce the required artifacts."
+    }
+  ],
   "dependencies": {
     "framework": "2.0.0"
   }

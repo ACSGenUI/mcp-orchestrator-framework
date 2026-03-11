@@ -185,7 +185,9 @@ class FrameworkServer {
       templates: {
         basePath: './templates',
         customTemplates: {}
-      }
+      },
+      // Configurable MCP prompts (prompts/list, prompts/get). Each item: name, title?, description?, message (text) or messages (array of { role, content: { type: 'text', text } })
+      prompts: []
     };
 
     if (configPath) {
@@ -238,6 +240,10 @@ class FrameworkServer {
       merged.templates = { ...merged.templates, ...customConfig.templates };
     }
 
+    if (customConfig.prompts && Array.isArray(customConfig.prompts)) {
+      merged.prompts = customConfig.prompts;
+    }
+
     return merged;
   }
 
@@ -251,6 +257,7 @@ class FrameworkServer {
         capabilities: {
           tools: {},
           resources: {},
+          prompts: {},
         },
       }
     );
@@ -299,6 +306,43 @@ class FrameworkServer {
 
     // Setup template resources
     this.setupTemplateResources();
+
+    // Setup configurable prompts (prompts/list, prompts/get)
+    this.setupPrompts();
+  }
+
+  /**
+   * Registers MCP prompts from configuration. Each prompt in config.prompts can have:
+   * - name (required): prompt identifier
+   * - title (optional): display title
+   * - description (optional): short description
+   * - message (optional): single user message text (used if messages not provided)
+   * - messages (optional): array of { role: "user"|"assistant", content: { type: "text", text: "..." } }
+   */
+  setupPrompts() {
+    const prompts = this.config.prompts || [];
+    for (const p of prompts) {
+      const name = p.name;
+      if (!name || typeof name !== 'string') continue;
+      const title = p.title;
+      const description = p.description || '';
+      let messageList;
+      if (Array.isArray(p.messages) && p.messages.length > 0) {
+        messageList = p.messages.map((m) => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: typeof m.content === 'string' ? { type: 'text', text: m.content } : { type: 'text', text: m.content?.text || '' }
+        }));
+      } else {
+        const text = typeof p.message === 'string' ? p.message : '';
+        messageList = text ? [{ role: 'user', content: { type: 'text', text } }] : [];
+      }
+      if (messageList.length === 0) continue;
+      const config = { title, description };
+      this.server.registerPrompt(name, config, async () => ({
+        description: description || undefined,
+        messages: messageList
+      }));
+    }
   }
 
   setupMainAnalyserFramework() {
