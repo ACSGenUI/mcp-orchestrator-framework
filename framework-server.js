@@ -3,9 +3,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve, isAbsolute, basename } from 'path';
 import https from 'https';
 import http from 'http';
+import { z } from 'zod';
 
 /**
  * Generic MCP Framework Server
@@ -167,6 +168,12 @@ class FrameworkServer {
             }
           ]
         },
+        artifactValidation: {
+          enabled: true,
+          title: 'Artifact Validation Framework',
+          description: 'Executable validation of generated artifacts against required templates',
+          toolName: 'validate_required_artifacts'
+        },
         templateMapping: {
           enabled: false,
           title: 'Template Mapping Diagram',
@@ -275,6 +282,11 @@ class FrameworkServer {
       this.setupRequiredOutputArtifactsFramework();
     }
 
+    // Setup executable artifact validation framework
+    if (this.config.frameworks.artifactValidation?.enabled && this.config.frameworks.requiredOutputArtifacts?.enabled) {
+      this.setupArtifactValidationFramework();
+    }
+
     // Setup manual audit framework (elicitation-based)
     if (this.config.frameworks.manualAudit?.enabled) {
       this.setupManualAuditFramework();
@@ -291,9 +303,17 @@ class FrameworkServer {
 
   setupMainAnalyserFramework() {
     const framework = this.config.frameworks.mainAnalyser;
+    const validationToolName = this.getArtifactValidationToolName();
+    const configuredArtifacts = this.config.frameworks.requiredOutputArtifacts?.artifacts || [];
+    const userProvidedArtifacts = configuredArtifacts
+      .filter((artifact) => artifact.userProvided)
+      .map((artifact) => artifact.filename);
     
     // Combine role and main prompt
-    const mainAnalyserContent = `${framework.role}\n\n${framework.mainPrompt}`;
+    const validationGate = this.config.frameworks.requiredOutputArtifacts?.enabled
+      ? `\n\n## Artifact Validation Gate (MUST PASS)\nAfter preparing artifacts, call '${validationToolName}' with generated outputs${userProvidedArtifacts.length ? ` plus user-provided required inputs (${userProvidedArtifacts.map((name) => `'${name}'`).join(', ')})` : ''}.\n${userProvidedArtifacts.length ? `Do not regenerate user-provided artifacts; treat them as immutable audit inputs.\n` : ''}If validation fails, regenerate only failing generated artifacts and re-run validation. Do not finalize until validation returns pass=true.`
+      : '';
+    const mainAnalyserContent = `${framework.role}\n\n${framework.mainPrompt}${validationGate}`;
 
     // Use configured tool name or default to 'main_analyser'
     const toolName = framework.toolName || 'main_analyser';
@@ -341,20 +361,32 @@ class FrameworkServer {
 
   setupSelfEvaluationFramework() {
     const framework = this.config.frameworks.selfEvaluation;
-    
+    const rowCounts = this.getTemplateArtifactRowCounts();
+    const countByArtifact = Object.fromEntries(rowCounts.map(c => [c.name, c.expectedRows]));
+    const validationToolName = this.getArtifactValidationToolName();
+    const configuredArtifacts = this.config.frameworks.requiredOutputArtifacts?.artifacts || [];
+    const userProvidedArtifacts = configuredArtifacts.filter((artifact) => artifact.userProvided);
+
     let selfEvaluationContent = `
 ## Self-Evaluation Framework
 
 ### Measurable Quality Metrics (0-100 scale)
 `;
 
-    // Generate metrics from configuration
-    Object.entries(framework.metrics).forEach(([key, metric]) => {
+    // Generate metrics from configuration; substitute dynamic Total Items when templateRowSource is set
+    Object.entries(framework.metrics).forEach(([key, metric], idx) => {
+      let formula = metric.formula;
+      if (metric.templateRowSource && Array.isArray(metric.templateRowSource)) {
+        const total = metric.templateRowSource.reduce((sum, name) => sum + (countByArtifact[name] || 0), 0);
+        formula = formula.replace(/\{\{totalItems\}\}/gi, String(total))
+          .replace(/Total Items/gi, String(total));
+      }
       selfEvaluationContent += `
-${Object.keys(framework.metrics).indexOf(key) + 1}. **${metric.name}** (0-100)
-   - Formula: ${metric.formula}
+${idx + 1}. **${metric.name}** (0-100)
+   - Formula: ${formula}
    - Target: ${metric.target}%
    - Weight: ${metric.weight}
+${metric.description ? `   - ${metric.description}` : ''}
 `;
     });
 
@@ -367,6 +399,43 @@ ${Object.keys(framework.metrics).indexOf(key) + 1}. **${metric.name}** (0-100)
 - Maximum ${framework.overallScore.maxIterations} iterations per analysis
 - Each iteration must improve overall score by ≥${framework.overallScore.improvementThreshold} points
 - Document all scoring in evaluation log
+`;
+
+    // Dynamic artifact row validation - generated CSVs must match template row counts
+    if (rowCounts.length > 0) {
+      selfEvaluationContent += `
+### Required Artifact Row Validation (MUST PASS)
+Generated CSV artifacts MUST have exactly the same number of data rows (excluding header) as their templates.
+Count the rows in each generated file and verify:
+
+| Artifact | Filename | Expected Data Rows |
+|----------|----------|-------------------|
+`;
+      rowCounts.forEach(({ name, filename, expectedRows }) => {
+        selfEvaluationContent += `| ${name} | ${filename} | ${expectedRows} |\n`;
+      });
+      selfEvaluationContent += `
+**Validation**: For each CSV artifact, (Generated Rows / Expected Rows) × 100 must equal 100. Mismatch = FAIL.
+`;
+    }
+
+    selfEvaluationContent += `
+### Required Artifacts Presence
+All required artifacts from the Required Output Artifacts framework must be present (generated or user-provided, per source). Missing any = FAIL.
+`;
+    if (userProvidedArtifacts.length > 0) {
+      selfEvaluationContent += `
+Required user-provided input artifacts must also be present and valid (do not regenerate them):
+${userProvidedArtifacts.map((artifact) => `- ${artifact.filename}`).join('\n')}
+`;
+    }
+
+    selfEvaluationContent += `
+### Executable Validation Gate (MUST PASS)
+After generating artifacts, call '${validationToolName}' and use its structured feedback.
+- Final self-evaluation cannot pass unless validator returns pass=true
+- If validator returns failures, regenerate only failed artifacts and re-run validation
+- Include validator score and failed checks in the evaluation log
 `;
 
     // Use configured tool name or default to 'self_evaluation_framework'
@@ -417,7 +486,10 @@ ${framework.outputSanitization.removeHarmfulContent ? '- Remove any potentially 
 
   setupRequiredOutputArtifactsFramework() {
     const framework = this.config.frameworks.requiredOutputArtifacts;
-    
+    const rowCounts = this.getTemplateArtifactRowCounts();
+    const countByFilename = Object.fromEntries(rowCounts.map(c => [c.filename, c.expectedRows]));
+    const validationToolName = this.getArtifactValidationToolName();
+
     let artifactsContent = `
 ## Required Artifacts Output
 
@@ -425,13 +497,29 @@ ${framework.outputSanitization.removeHarmfulContent ? '- Remove any potentially 
 `;
 
     framework.artifacts.forEach((artifact, index) => {
+      const expectedRows = artifact.type === 'csv' ? countByFilename[artifact.filename] : null;
+      const source = artifact.userProvided ? 'User-provided input (do not generate)' : 'Generated by analyzer';
       artifactsContent += `
 ${index + 1}. **${artifact.name}** ('${artifact.filename}')
    - Type: ${artifact.type}
    - Template: ${artifact.template}
+   - Source: ${source}
    - Required: ${artifact.required ? 'Yes' : 'No'}
+${expectedRows != null ? `   - Expected data rows (excl. header): ${expectedRows} — artifact MUST match exactly` : ''}
 `;
     });
+
+    artifactsContent += `
+### Artifact Row Count Validation (CSV artifacts)
+For each CSV artifact (generated or user-provided), the number of data rows (excluding header) MUST equal the template row count.
+Load the template resource to get the exact structure; preserve all rows.
+`;
+
+    artifactsContent += `
+### Executable Validation Tool
+After artifact preparation, call '${validationToolName}' and provide generated artifact contents plus required user-provided inputs.
+Validation result must return pass=true before finalizing output.
+`;
 
     artifactsContent += `
 ### Artifact Dependencies
@@ -449,6 +537,350 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
     }, async () => ({
       content: [{ type: "text", text: artifactsContent }]
     }));
+  }
+
+  getArtifactValidationToolName() {
+    const validationFramework = this.config.frameworks.artifactValidation || {};
+    const requiredFramework = this.config.frameworks.requiredOutputArtifacts || {};
+    return validationFramework.toolName || requiredFramework.validationToolName || 'validate_required_artifacts';
+  }
+
+  /**
+   * Validate generated artifacts against configured required output artifacts and templates.
+   * Returns machine-readable pass/fail feedback for iterative correction.
+   */
+  setupArtifactValidationFramework() {
+    const validationFramework = this.config.frameworks.artifactValidation || {};
+    const requiredFramework = this.config.frameworks.requiredOutputArtifacts || {};
+    const toolName = this.getArtifactValidationToolName();
+    const title = validationFramework.title || 'Artifact Validation Framework';
+    const description = validationFramework.description || 'Validate generated artifacts against required templates and structure';
+
+    this.server.registerTool(toolName, {
+      title,
+      description,
+      inputSchema: {
+        artifacts: z.array(z.object({
+          filename: z.string(),
+          content: z.string()
+        })).optional(),
+        artifactPaths: z.array(z.string()).optional(),
+        baseDir: z.string().optional(),
+        includeOptionalArtifacts: z.boolean().optional()
+      }
+    }, async ({ artifacts = [], artifactPaths = [], baseDir, includeOptionalArtifacts = false } = {}) => {
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      const configuredArtifacts = Array.isArray(requiredFramework.artifacts) ? requiredFramework.artifacts : [];
+      const artifactsToValidate = configuredArtifacts.filter((artifact) => includeOptionalArtifacts || artifact.required);
+
+      const artifactContentByFilename = new Map();
+      const artifactSources = {};
+      const readIssues = [];
+      const normalizeText = (value) => String(value || '').replace(/\r\n/g, '\n');
+
+      if (Array.isArray(artifacts)) {
+        for (const artifact of artifacts) {
+          if (!artifact || !artifact.filename) continue;
+          artifactContentByFilename.set(artifact.filename, normalizeText(artifact.content));
+          artifactSources[artifact.filename] = 'inline';
+        }
+      }
+
+      if (Array.isArray(artifactPaths)) {
+        for (const artifactPath of artifactPaths) {
+          try {
+            const normalizedPath = isAbsolute(artifactPath)
+              ? artifactPath
+              : resolve(process.cwd(), artifactPath);
+            if (!existsSync(normalizedPath)) {
+              readIssues.push(`Artifact path not found: ${artifactPath}`);
+              continue;
+            }
+            const filename = basename(normalizedPath);
+            if (!artifactContentByFilename.has(filename)) {
+              artifactContentByFilename.set(filename, normalizeText(readFileSync(normalizedPath, 'utf8')));
+              artifactSources[filename] = `file:${artifactPath}`;
+            }
+          } catch (error) {
+            readIssues.push(`Could not read artifact path '${artifactPath}': ${error.message}`);
+          }
+        }
+      }
+
+      if (artifactContentByFilename.size === 0) {
+        const normalizedBaseDir = baseDir
+          ? (isAbsolute(baseDir) ? baseDir : resolve(process.cwd(), baseDir))
+          : process.cwd();
+        for (const artifact of artifactsToValidate) {
+          const candidatePath = join(normalizedBaseDir, artifact.filename);
+          if (!existsSync(candidatePath)) continue;
+          artifactContentByFilename.set(artifact.filename, normalizeText(readFileSync(candidatePath, 'utf8')));
+          artifactSources[artifact.filename] = `file:${candidatePath}`;
+        }
+      }
+
+      const checks = [];
+      const failures = [];
+      const warnings = [];
+      const perArtifact = {};
+
+      const recordCheck = ({
+        artifact,
+        type,
+        status,
+        severity = 'medium',
+        expected = null,
+        actual = null,
+        message,
+        fix = null
+      }) => {
+        const check = { artifact, type, status, severity, expected, actual, message, fix };
+        checks.push(check);
+        if (!perArtifact[artifact]) perArtifact[artifact] = { pass: true, checks: [] };
+        perArtifact[artifact].checks.push(check);
+        if (status === 'fail') {
+          perArtifact[artifact].pass = false;
+          failures.push(check);
+        }
+        if (status === 'warning') warnings.push(check);
+      };
+
+      for (const artifact of artifactsToValidate) {
+        const artifactName = artifact.filename;
+        const generated = artifactContentByFilename.get(artifactName);
+        const userProvided = Boolean(artifact.userProvided);
+
+        if (generated == null) {
+          recordCheck({
+            artifact: artifactName,
+            type: 'presence',
+            status: 'fail',
+            severity: artifact.required ? 'critical' : 'medium',
+            expected: userProvided ? 'provided as input' : 'present',
+            actual: 'missing',
+            message: userProvided
+              ? `Required user-provided artifact '${artifactName}' was not provided`
+              : `Required artifact '${artifactName}' was not provided`,
+            fix: userProvided
+              ? `Provide '${artifactName}' as input artifact (do not regenerate it)`
+              : `Generate '${artifactName}' and include it in the validator input`
+          });
+          continue;
+        }
+
+        recordCheck({
+          artifact: artifactName,
+          type: 'presence',
+          status: 'pass',
+          severity: 'low',
+          expected: userProvided ? 'provided as input' : 'present',
+          actual: 'present',
+          message: userProvided
+            ? `User-provided artifact '${artifactName}' is present`
+            : `Artifact '${artifactName}' is present`
+        });
+
+        if (artifact.type === 'csv') {
+          let generatedCSV;
+          try {
+            generatedCSV = this.parseCSV(generated);
+          } catch (error) {
+            recordCheck({
+              artifact: artifactName,
+              type: 'csv_parse',
+              status: 'fail',
+              severity: 'critical',
+              message: `Generated CSV could not be parsed: ${error.message}`,
+              fix: `Ensure '${artifactName}' is valid CSV with a single header row`
+            });
+            continue;
+          }
+
+          if (!artifact.templatePath) {
+            recordCheck({
+              artifact: artifactName,
+              type: 'template_path',
+              status: 'warning',
+              severity: 'medium',
+              message: `No templatePath configured for '${artifactName}', strict structural validation skipped`
+            });
+            continue;
+          }
+
+          const templateAbsolutePath = join(__dirname, artifact.templatePath);
+          if (!existsSync(templateAbsolutePath)) {
+            recordCheck({
+              artifact: artifactName,
+              type: 'template_exists',
+              status: 'fail',
+              severity: 'critical',
+              expected: artifact.templatePath,
+              actual: 'missing',
+              message: `Template not found at '${artifact.templatePath}'`,
+              fix: `Ensure template exists and templatePath is correct for '${artifactName}'`
+            });
+            continue;
+          }
+
+          const templateContent = readFileSync(templateAbsolutePath, 'utf8');
+          const templateCSV = this.parseCSV(templateContent);
+
+          const expectedHeaders = templateCSV.headers;
+          const actualHeaders = generatedCSV.headers;
+          const sameHeaders = expectedHeaders.length === actualHeaders.length &&
+            expectedHeaders.every((header, idx) => header === actualHeaders[idx]);
+
+          recordCheck({
+            artifact: artifactName,
+            type: 'csv_headers',
+            status: sameHeaders ? 'pass' : 'fail',
+            severity: 'critical',
+            expected: expectedHeaders,
+            actual: actualHeaders,
+            message: sameHeaders
+              ? 'CSV header order and names match template'
+              : 'CSV headers do not match template exactly',
+            fix: sameHeaders ? null : `Regenerate '${artifactName}' from template and preserve exact header order`
+          });
+
+          const expectedRows = templateCSV.rows.length;
+          const actualRows = generatedCSV.rows.length;
+          const sameRowCount = expectedRows === actualRows;
+
+          recordCheck({
+            artifact: artifactName,
+            type: 'csv_row_count',
+            status: sameRowCount ? 'pass' : 'fail',
+            severity: 'critical',
+            expected: expectedRows,
+            actual: actualRows,
+            message: sameRowCount
+              ? 'CSV data row count matches template'
+              : 'CSV data row count does not match template',
+            fix: sameRowCount ? null : `Preserve all template rows for '${artifactName}'. Expected ${expectedRows} rows`
+          });
+        }
+
+        if (artifact.type === 'markdown' && artifact.templatePath) {
+          const templateAbsolutePath = join(__dirname, artifact.templatePath);
+          if (!existsSync(templateAbsolutePath)) {
+            recordCheck({
+              artifact: artifactName,
+              type: 'template_exists',
+              status: 'fail',
+              severity: 'critical',
+              expected: artifact.templatePath,
+              actual: 'missing',
+              message: `Template not found at '${artifact.templatePath}'`,
+              fix: `Ensure template exists and templatePath is correct for '${artifactName}'`
+            });
+            continue;
+          }
+
+          const templateContent = readFileSync(templateAbsolutePath, 'utf8');
+          const templateHeadings = this.extractMarkdownHeadings(templateContent);
+          const generatedHeadings = this.extractMarkdownHeadings(generated);
+          const missingHeadings = templateHeadings.filter((heading) => !generatedHeadings.includes(heading));
+
+          recordCheck({
+            artifact: artifactName,
+            type: 'markdown_sections',
+            status: missingHeadings.length === 0 ? 'pass' : 'fail',
+            severity: 'high',
+            expected: templateHeadings.length,
+            actual: generatedHeadings.length,
+            message: missingHeadings.length === 0
+              ? 'All template markdown headings are present'
+              : `Missing ${missingHeadings.length} required headings from template`,
+            fix: missingHeadings.length === 0
+              ? null
+              : `Restore missing sections in '${artifactName}': ${missingHeadings.join(', ')}`
+          });
+        }
+      }
+
+      for (const issue of readIssues) {
+        warnings.push({
+          artifact: 'input',
+          type: 'read_warning',
+          status: 'warning',
+          severity: 'medium',
+          message: issue
+        });
+      }
+
+      const passedChecks = checks.filter((check) => check.status === 'pass').length;
+      const failedChecks = checks.filter((check) => check.status === 'fail').length;
+      const warningChecks = checks.filter((check) => check.status === 'warning').length;
+      const totalChecks = checks.length;
+      const score = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
+      const pass = failedChecks === 0;
+
+      const report = {
+        pass,
+        score,
+        summary: {
+          artifactsExpected: artifactsToValidate.length,
+          artifactsProvided: artifactContentByFilename.size,
+          checks: totalChecks,
+          passedChecks,
+          failedChecks,
+          warningChecks
+        },
+        artifacts: perArtifact,
+        failures,
+        warnings,
+        source: {
+          artifactSources,
+          usedBaseDir: baseDir || null
+        },
+        checkedAt: new Date().toISOString(),
+        nextAction: pass
+          ? 'All validations passed. You can finalize output.'
+          : "Fix failed checks, regenerate only failing artifacts, and call this validator again."
+      };
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `## Artifact Validation Result\nStatus: ${pass ? 'PASS' : 'FAIL'}\nScore: ${score}/100\nFailed checks: ${failedChecks}\n\n\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\``
+          }
+        ],
+        structuredContent: report
+      };
+    });
+  }
+
+  /**
+   * Get expected row counts from CSV templates for required output artifacts.
+   * Used for dynamic validation - generated artifacts must match template row counts.
+   * @returns {Array<{name: string, filename: string, expectedRows: number}>}
+   */
+  getTemplateArtifactRowCounts() {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const artifacts = this.config.frameworks.requiredOutputArtifacts?.artifacts || [];
+    const counts = [];
+    for (const artifact of artifacts) {
+      if (artifact.type !== 'csv' || !artifact.templatePath) continue;
+      const absolutePath = join(__dirname, artifact.templatePath);
+      if (!existsSync(absolutePath)) continue;
+      try {
+        const content = readFileSync(absolutePath, 'utf8');
+        const { rows } = this.parseCSV(content);
+        counts.push({
+          name: artifact.name,
+          filename: artifact.filename,
+          expectedRows: rows.length,
+          templatePath: artifact.templatePath,
+        });
+      } catch (err) {
+        console.error(`Could not load template for ${artifact.filename}:`, err.message);
+      }
+    }
+    return counts;
   }
 
   parseCSV(csvContent) {
@@ -487,6 +919,13 @@ ${index + 1}. **${artifact.name}** ('${artifact.filename}')
       return row;
     });
     return { headers, rows };
+  }
+
+  extractMarkdownHeadings(markdownContent) {
+    const lines = String(markdownContent || '').split('\n');
+    return lines
+      .map((line) => line.trim())
+      .filter((line) => /^#{1,6}\s+/.test(line));
   }
 
   setupManualAuditFramework() {
