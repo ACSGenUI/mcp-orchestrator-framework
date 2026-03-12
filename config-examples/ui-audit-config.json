@@ -23,60 +23,7 @@
           ]
         }
       },
-      "mainPrompt": "STEP 0: Determine the audit mode. If applicationUrl is provided, run BOTH URL-based audit (webresearch, chrome-devtools, W3C validator, Lighthouse/Axe) and code-based audit (eslint/stylelint/static analysis). If only codebasePath is provided, run code-based audit. Merge evidence from all runs. STEP 1: Execute all implied audits directly. Never defer work or recommend another audit. Do NOT output phrases like \"Requires audit\", \"Cannot determine\", \"Requires Lighthouse audit\", \"Requires CSS audit\", or \"Requires code audit\". Simulate Lighthouse, Axe, ESLint, Stylelint, HTML Validator, and Performance audits internally when tool data is unavailable, and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence. STEP 2: Use resource 'EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. For rows where Tool Supported = Yes, you MUST use the listed tool and return Yes/No/Partial with evidence; do NOT mark Manual Review Needed unless the tool cannot run or provides no signal. Run project-configured eslint/stylelint CLI commands directly (not MCP) to find issues. Use MCP tools for W3C validator, Lighthouse/Axe, and chrome-devtools. Use Manual Review Needed only when no automated validation is possible; otherwise answer Yes/No/Partial with a brief justification in Comments. Do NOT change other columns. Keep all rows. Save as 'UI-Audit-Checklist.csv'. STEP 3: Use user-uploaded input artifact 'UI-Audit-Manual-Checklist.csv' as the manual audit source. Do NOT call 'ui_audit_manual_checklist'. Do NOT generate, overwrite, or alter the manual checklist; treat it as immutable input. If this artifact is missing, return: Status: Inconclusive; Reason; Exact missing artifact 'UI-Audit-Manual-Checklist.csv'. STEP 4: Use resource 'ui-audit-summary-template.md' and fill all sections using BOTH the automated checklist (STEP 2 output) AND the user-provided manual checklist (STEP 3 input). Preserve the template structure and do not add or remove sections. STEP 5 (FINAL): Use resource 'metrics.csv'. This MUST be the last generated artifact, after the automated checklist (STEP 2) is complete and the manual checklist input (STEP 3) is available. Populate the value column for every key by consolidating scores, counts, and findings from BOTH audit sources. For the 'topIssues' section: identify the most critical issues across both automated and manual audits, rank them by severity (Critical first, then High, then Quick Win), assign a unique ID per issue (e.g. A11Y-001, PERF-003, CODE-012, UX-005, SEO-002), and populate severity, id, description, subcategory (the specific standard or rule violated), location.file, location.line, and category for each. Set topIssues.count to the actual number of top issues populated (max 10). For the 'componentsRequiringAttention' section: identify the components/files with the highest number of failures across both audits, and for each populate the name (filename), path (relative file path), failedChecks (total failed checks), criticalFailures (number of critical-severity failures), and healthScore (0-100 where 0 is worst). Set componentsRequiringAttention.count to the actual number of components populated (max 10). Preserve all keys and row order. Save as 'UI-Audit-Metrics.csv'. STEP 6: Call 'validate_required_artifacts' with generated artifacts plus the user-provided manual checklist artifact. If validation fails, regenerate only the failing generated artifacts and rerun validation until pass=true or iteration limit is reached."
-    },
-    "errorHandling": {
-      "enabled": true,
-      "title": "UI Audit Error Handling",
-      "description": "Error handling framework for UI audit analysis",
-      "toolName": "ui_audit_error_handling_framework",
-      "errors": {
-        "urlNotProvided": {
-          "type": "input_error",
-          "severity": "critical",
-          "message": "Application URL not provided",
-          "action": "Prompt user for URL before proceeding",
-          "retry": false
-        },
-        "urlNotAccessible": {
-          "type": "network_error",
-          "severity": "critical",
-          "message": "Cannot access the provided URL",
-          "action": "Verify URL is correct and accessible, check for authentication requirements",
-          "retry": true,
-          "maxRetries": 3
-        },
-        "authenticationRequired": {
-          "type": "access_error",
-          "severity": "high",
-          "message": "Application requires authentication",
-          "action": "Prompt user for authentication method or credentials",
-          "retry": false
-        },
-        "pageLoadTimeout": {
-          "type": "performance_error",
-          "severity": "medium",
-          "message": "Page load timeout exceeded",
-          "action": "Increase timeout and retry, document slow load time as finding",
-          "retry": true,
-          "maxRetries": 2
-        },
-        "javascriptError": {
-          "type": "code_error",
-          "severity": "high",
-          "message": "JavaScript errors detected during audit",
-          "action": "Document errors and continue audit",
-          "retry": false
-        },
-        "toolFailure": {
-          "type": "tool_error",
-          "severity": "high",
-          "message": "Chrome DevTools or WebResearch tool failed",
-          "action": "Try alternative tool or skip specific check, document limitation",
-          "retry": true,
-          "maxRetries": 2
-        }
-      }
+      "mainPrompt": "## STEP 0 – Audit mode\nIf applicationUrl is provided: run BOTH URL-based audit (webresearch, chrome-devtools, W3C validator, Lighthouse/Axe) and code-based audit (eslint/stylelint/static analysis). If only codebasePath: run code-based audit. Merge evidence from all runs.\n\n## STEP 1 – Execute directly\nRun all implied audits; never defer or recommend another audit. Do not output: \"Requires audit\", \"Cannot determine\", \"Requires Lighthouse/CSS/code audit\". When tool data is unavailable, simulate Lighthouse, Axe, ESLint, Stylelint, HTML Validator, and Performance internally and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence.\n\n## STEP 2 – Automated checklist\nUse resource 'EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. Rows with Tool Supported = Yes: use the listed tool and return Yes/No/Partial with evidence; use Manual Review Needed only when the tool cannot run or gives no signal. Run eslint/stylelint via project CLI (not MCP); use MCP for W3C validator, Lighthouse/Axe, chrome-devtools. Do not change other columns; keep all rows. Save as 'UI-Audit-Checklist.csv'.\n\n## STEP 3 – Manual checklist input\nUse user-uploaded 'UI-Audit-Manual-Checklist.csv' as manual audit source. Do not call 'ui_audit_manual_checklist'; do not generate, overwrite, or alter it (immutable input). If missing, return: Status: Inconclusive; Reason; Exact missing artifact 'UI-Audit-Manual-Checklist.csv'.\n\n## STEP 4 – Summary report\nUse resource 'ui-audit-summary-template.md'. Fill all sections from BOTH STEP 2 output and STEP 3 input. Preserve template structure; do not add or remove sections.\n\n## STEP 5 – Metrics (FINAL artifact)\nUse resource 'metrics.csv'. Generate only after STEP 2 and STEP 3 are available. Populate value for every key from BOTH audit sources.\n- topIssues: rank by severity (Critical → High → Quick Win); assign unique id (e.g. A11Y-001, PERF-003); populate severity, id, description, subcategory, location.file, location.line, category; set topIssues.count = actual count (max 10).\n- componentsRequiringAttention: name, path, failedChecks, criticalFailures, healthScore (0–100, 0 worst); set count (max 10). Preserve all keys and row order. Save as 'UI-Audit-Metrics.csv'.\n\n## STEP 6 – Validation\nCall 'validate_required_artifacts' with generated artifacts plus user-provided manual checklist. On failure, regenerate only failing artifacts and rerun until pass=true or iteration limit."
     },
     "selfEvaluation": {
       "enabled": true,
@@ -89,66 +36,10 @@
           "formula": "(Checklist Items Evaluated / Total Items) × 100",
           "target": 100,
           "weight": 3,
-          "description": "All checklist items must be evaluated",
+          "description": "Checklists must be fully filled with no item in open status and no unfilled items. Every item must be evaluated and verified; none skipped, left blank, or in not verified status. Do not leave any item as manual review needed or NA unless the framework explicitly allows it; all items must be marked as implemented or not implemented.",
           "templateRowSource": [
             "ui_audit_checklist",
             "manual_audit_checklist"
-          ]
-        },
-        "accessibilityCoverage": {
-          "name": "Accessibility Audit Coverage",
-          "formula": "(A11y Checks Completed / Total A11y Checks) × 100",
-          "target": 100,
-          "weight": 2,
-          "checks": [
-            "ARIA compliance",
-            "Keyboard navigation",
-            "Color contrast",
-            "Screen reader compatibility",
-            "WCAG 2.1 AA compliance",
-            "Focus management",
-            "Alt text presence",
-            "Semantic HTML"
-          ]
-        },
-        "performanceMetricsCaptured": {
-          "name": "Performance Metrics Coverage",
-          "formula": "(Performance Metrics Captured / Required Metrics) × 100",
-          "target": 100,
-          "weight": 2,
-          "metrics": [
-            "Largest Contentful Paint (LCP)",
-            "First Input Delay (FID)",
-            "Cumulative Layout Shift (CLS)",
-            "Time to First Byte (TTFB)",
-            "Total Blocking Time (TBT)",
-            "First Contentful Paint (FCP)",
-            "Speed Index",
-            "Total page weight",
-            "Number of requests"
-          ]
-        },
-        "responsivenessTested": {
-          "name": "Responsive Design Coverage",
-          "formula": "(Viewports Tested / Required Viewports) × 100",
-          "target": 100,
-          "weight": 1.5,
-          "viewports": [
-            "Mobile (375px)",
-            "Tablet (768px)",
-            "Desktop (1920px)",
-            "Large Desktop (2560px)"
-          ]
-        },
-        "evidenceQuality": {
-          "name": "Evidence Documentation Score",
-          "formula": "(Issues with Evidence / Total Issues) × 100",
-          "target": 95,
-          "weight": 1.5,
-          "evidence": [
-            "Screenshots",
-            "Metrics",
-            "Observations"
           ]
         }
       },
@@ -157,25 +48,6 @@
         "passingThreshold": 90,
         "maxIterations": 3,
         "improvementThreshold": 5
-      }
-    },
-    "manualAudit": {
-      "enabled": false,
-      "title": "Manual Audit Checklist",
-      "description": "Collect manual review input from the reviewer for checklist items that cannot be automated. Reads the manual checklist CSV, groups items by category, and uses elicitation to collect Pass/Fail/NA status and reviewer comments for each category.",
-      "toolName": "ui_audit_manual_checklist",
-      "templatePath": "audit/manual_audit_checklists.csv",
-      "elicitation": {
-        "groupBy": "Category",
-        "statusField": "Status (Pass / Fail / NA)",
-        "commentsField": "Reviewer Comments",
-        "statusOptions": [
-          "Pass",
-          "Fail",
-          "NA"
-        ],
-        "messagePrefix": "Manual Review Required",
-        "skipCategories": []
       }
     },
     "securityGuardrails": {
@@ -198,23 +70,6 @@
           "text/plain",
           "application/xml"
         ]
-      },
-      "promptInjectionProtection": {
-        "enabled": true,
-        "ignoreEmbeddedInstructions": true,
-        "maintainFocus": true,
-        "flagSuspiciousActivity": true
-      },
-      "outputSanitization": {
-        "escapeOutput": true,
-        "validateContent": true,
-        "removeHarmfulContent": true,
-        "redactSensitiveData": true
-      },
-      "credentialHandling": {
-        "neverLogCredentials": true,
-        "neverStoreCredentials": true,
-        "promptForConsentBeforeAuth": true
       }
     },
     "requiredOutputArtifacts": {
@@ -222,12 +77,6 @@
       "title": "UI Audit Required Output Artifacts",
       "description": "Required output artifacts for UI audit analysis",
       "toolName": "ui_audit_required_output_artifacts",
-      "templateEnforcement": {
-        "strict": true,
-        "dynamicTemplateLoading": true,
-        "parseTemplatesAtRuntime": true,
-        "instructions": "All output artifacts MUST strictly adhere to the provided templates. Load templates dynamically, extract structure automatically, preserve all elements, and fill with audit findings."
-      },
       "artifacts": [
         {
           "name": "ui_audit_checklist",
@@ -235,22 +84,7 @@
           "filename": "UI-Audit-Checklist.csv",
           "template": "EDS_Audit_Checklist.csv",
           "templatePath": "templates/ui-audit/EDS_Audit_Checklist.csv",
-          "required": true,
-          "strictTemplateAdherence": true,
-          "description": "AEM EDS audit checklist. Populate ONLY the last 2 columns.",
-          "dynamicBehavior": {
-            "loadTemplate": true,
-            "extractColumns": "Parse CSV header row",
-            "extractRows": "Read all checklist items",
-            "preserveStructure": "Maintain exact column order, row order, and all template rows",
-            "fillStrategy": "Fill ONLY Implemented? and Comments columns."
-          },
-          "contentGuidelines": {
-            "implementedColumn": "Use ONLY: Yes, No, Partial, Manual Review Needed. If Tool Supported = Yes, use the tool and return Yes/No/Partial. Manual Review Needed only when the tool cannot run or provides no usable signal.",
-            "commentsColumn": "Add observations, findings, metrics, evidence and brief tool-based justification. NO recommendations.",
-            "preserveAllRows": "Do NOT delete or skip any rows",
-            "preserveFirstSixColumns": "Do NOT modify other columns"
-          }
+          "required": true
         },
         {
           "name": "audit_metrics",
@@ -258,24 +92,7 @@
           "filename": "UI-Audit-Metrics.csv",
           "template": "metrics.csv",
           "templatePath": "templates/ui-audit/metrics.csv",
-          "required": true,
-          "strictTemplateAdherence": true,
-          "description": "Structured metrics CSV capturing all quantitative audit scores, domain-level findings, and risk indices. Populate the value column for every key.",
-          "dynamicBehavior": {
-            "loadTemplate": true,
-            "extractColumns": "Parse CSV header row (key, value)",
-            "extractRows": "Read all metric keys",
-            "preserveStructure": "Maintain exact key order and all template rows",
-            "fillStrategy": "Fill ONLY the value column using audit findings and tool outputs."
-          },
-          "contentGuidelines": {
-            "valueColumn": "Populate with numeric scores, counts, percentages, or descriptive values derived from the audit. Use empty string only when the metric is genuinely not applicable.",
-            "preserveAllRows": "Do NOT delete or skip any rows",
-            "preserveKeyColumn": "Do NOT modify the key column",
-            "ragRating": "For overallStatus.ragRating, compute the overall project RAG status as: Green if uiQualityScore >= 80 AND no critical failures; Amber if uiQualityScore >= 60 OR critical failures <= 2; Red if uiQualityScore < 60 OR critical failures > 2. Value must be exactly one of: Red, Amber, Green.",
-            "topIssues": "Consolidate the most impactful issues from BOTH automated and manual audits. Rank by severity: Critical first, then High, then Quick Win. Each issue needs: severity (Critical / High / Quick Win), id (unique identifier like A11Y-001, PERF-003, CODE-012, UX-005, SEO-002), description (concise issue title), subcategory (the specific standard, rule, or area violated e.g. WCAG 2.1 AA, Core Web Vitals, Keyboard Navigation, Complexity, Form Validation, Color Contrast, Meta Tags), location.file (source file name), location.line (line number in source), category (domain: Accessibility, Performance, Code Quality, UX, SEO, Security). Set topIssues.count to the number of issues actually populated. Leave unused slots (beyond actual count) with empty values.",
-            "componentsRequiringAttention": "Identify the components or files with the highest concentration of failures across BOTH automated and manual audits. For each component: name (display filename e.g. ProductCard.tsx), path (relative source path e.g. /src/components/ProductCard.tsx), failedChecks (total number of failed checks for this component), criticalFailures (number of critical-severity failures), healthScore (0-100 composite health where 100 is perfect and 0 is worst; derive from ratio of passed to failed checks weighted by severity). Sort by healthScore ascending (worst first). Set componentsRequiringAttention.count to the number of components actually populated. Leave unused slots with empty values."
-          }
+          "required": true
         },
         {
           "name": "manual_audit_checklist",
@@ -284,24 +101,7 @@
           "template": "manual_audit_checklists.csv",
           "templatePath": "audit/manual_audit_checklists.csv",
           "required": true,
-          "strictTemplateAdherence": true,
-          "description": "Manual audit checklist uploaded by user at audit start. Use as immutable input and validate structure; do not regenerate.",
-          "dynamicBehavior": {
-            "loadTemplate": true,
-            "extractColumns": "Parse CSV header row",
-            "extractRows": "Read all checklist items",
-            "preserveStructure": "Maintain exact column order, row order, and all template rows",
-            "fillStrategy": "Fill ONLY Status (Pass / Fail / NA) and Reviewer Comments columns via elicitation responses."
-          },
-          "contentGuidelines": {
-            "statusColumn": "Use ONLY: Pass, Fail, NA. Values come from reviewer elicitation responses.",
-            "commentsColumn": "Reviewer's observations and comments from elicitation. Preserve exactly as entered.",
-            "preserveAllRows": "Do NOT delete or skip any rows",
-            "preserveOtherColumns": "Do NOT modify Phase, Category, Sub-Category, Checklist Item, Severity, Review Type, or Mandatory columns",
-            "immutableInput": "Treat this file as read-only input from user. Do NOT modify values or regenerate."
-          },
-          "userProvided": true,
-          "requiredInput": true
+          "userProvided": true
         },
         {
           "name": "audit_summary",
@@ -309,32 +109,7 @@
           "filename": "audit-summary.md",
           "template": "ui-audit-summary-template.md",
           "templatePath": "templates/ui-audit/ui-audit-summary-template.md",
-          "required": true,
-          "strictTemplateAdherence": true,
-          "description": "UI audit summary report generated from checklist findings. Follow strict template structure.",
-          "contentRestrictions": {
-            "noRecommendations": "Do NOT include recommendations or remediation steps",
-            "noCodeSnippets": "Do NOT include code examples or implementation details",
-            "noEffortEstimates": "Do NOT include effort estimates, timelines, or costs",
-            "factualOnly": "Include ONLY factual observations, findings, and status assessments"
-          },
-          "dynamicBehavior": {
-            "loadTemplate": true,
-            "extractSections": "Parse markdown to identify all main sections",
-            "extractSubsections": "Identify all subsections",
-            "extractTables": "Identify table structures and preserve column headers",
-            "preserveStructure": "Maintain exact section order, subsection hierarchy, table formats",
-            "fillStrategy": "Replace placeholders with findings from checklist. Remove 'Recommendation' fields from issues."
-          },
-          "contentGuidelines": {
-            "preserveAllSections": "Include every section, even if no findings",
-            "preserveAllSubsections": "Include every subsection",
-            "preserveTables": "Maintain all table structures and columns",
-            "fillWithFindings": "Use checklist findings to populate",
-            "emptyContentHandling": "State 'No issues found' or 'N/A' for empty sections",
-            "maintainFormatting": "Keep exact markdown formatting",
-            "issueFormat": "For each issue: Description and Impact only. NO Recommendation field."
-          }
+          "required": true
         }
       ]
     },
@@ -375,7 +150,7 @@
     }
   ],
   "dependencies": {
-    "framework": "2.0.0",
+    "framework": "2.0.1",
     "mcpTools": {
       "webresearch": "required",
       "chrome-devtools": "required",
