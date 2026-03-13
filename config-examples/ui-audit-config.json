@@ -169,7 +169,7 @@
     {
       "name": "ui_audit_analyser",
       "title": "UI Audit – Fill Checklist",
-      "description": "Run the UI audit category-by-category and fill the automated checklist with evidence. Provide site_url when invoking.",
+      "description": "13-March-2026/v10 Run the UI audit category-by-category and fill the automated checklist with evidence. Provide site_url when invoking.",
       "arguments": [
         {
           "name": "site_url",
