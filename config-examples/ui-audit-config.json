@@ -23,7 +23,7 @@
           ]
         }
       },
-      "mainPrompt": "## STEP 0 – Audit mode\nIf applicationUrl is provided: run BOTH URL-based audit (webresearch, chrome-devtools, W3C validator, Lighthouse/Axe) and code-based audit (eslint/stylelint/static analysis). If only codebasePath: run code-based audit. Merge evidence from all runs.\n\n## STEP 1 – Execute directly\nRun all implied audits; never defer or recommend another audit. Do not output: \"Requires audit\", \"Cannot determine\", \"Requires Lighthouse/CSS/code audit\". When tool data is unavailable, simulate Lighthouse, Axe, ESLint, Stylelint, HTML Validator, and Performance internally and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence.\n\n## STEP 2 – Automated checklist\nUse resource 'EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. Rows with Tool Supported = Yes: use the listed tool and return Yes/No/Partial with evidence; use Manual Review Needed only when the tool cannot run or gives no signal. Run eslint/stylelint via project CLI (not MCP); use MCP for W3C validator, Lighthouse/Axe, chrome-devtools. Do not change other columns; keep all rows. Save as 'UI-Audit-Checklist.csv'.\n\n## STEP 3 – Manual checklist input\nUse user-uploaded 'UI-Audit-Manual-Checklist.csv' as manual audit source. Do not call 'ui_audit_manual_checklist'; do not generate, overwrite, or alter it (immutable input). If missing, return: Status: Inconclusive; Reason; Exact missing artifact 'UI-Audit-Manual-Checklist.csv'.\n\n## STEP 4 – Summary report\nUse resource 'ui-audit-summary-template.md'. Fill all sections from BOTH STEP 2 output and STEP 3 input. Preserve template structure; do not add or remove sections.\n\n## STEP 5 – Metrics (FINAL artifact)\nUse resource 'metrics.csv'. Generate only after STEP 2 and STEP 3 are available. Populate value for every key from BOTH audit sources.\n- topIssues: rank by severity (Critical → High → Quick Win); assign unique id (e.g. A11Y-001, PERF-003); populate severity, id, description, subcategory, location.file, location.line, category; set topIssues.count = actual count (max 10).\n- componentsRequiringAttention: name, path, failedChecks, criticalFailures, healthScore (0–100, 0 worst); set count (max 10). Preserve all keys and row order. Save as 'UI-Audit-Metrics.csv'.\n\n## STEP 6 – Validation\nCall 'validate_required_artifacts' with generated artifacts plus user-provided manual checklist. On failure, regenerate only failing artifacts and rerun until pass=true or iteration limit."
+      "mainPrompt": "## STEP 0 – Audit mode\nIf applicationUrl is provided: run BOTH URL-based audit (webresearch, chrome-devtools, W3C validator, Lighthouse/Axe) and code-based audit (eslint/stylelint/static analysis). If only codebasePath: run code-based audit. Merge evidence from all runs.\n\n## STEP 1 – Execute directly\nRun all implied audits; never defer or recommend another audit. Do not output: \"Requires audit\", \"Cannot determine\", \"Requires Lighthouse/CSS/code audit\". When tool data is unavailable, simulate Lighthouse, Axe, ESLint, Stylelint, HTML Validator, and Performance internally and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence.\n\n## STEP 2 – Automated checklist only\nUse resource 'EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. Rows with Tool Supported = Yes: use the listed tool and return Yes/No/Partial with evidence; use Manual Review Needed only when the tool cannot run or gives no signal. Run eslint/stylelint via project CLI (not MCP); use MCP for W3C validator, Lighthouse/Axe, chrome-devtools. Do not change other columns; keep all rows. Save as 'UI-Audit-Checklist.csv'. Do not generate summary, metrics, or manual-checklist steps here."
     },
     "selfEvaluation": {
       "enabled": true,
@@ -127,26 +127,34 @@
   "prompts": [
     {
       "name": "ui_audit_analyser",
-      "title": "UI Audit Analysis Starter",
-      "description": "Starter prompt for UI audit analysis. Provide site_url when invoking.",
+      "title": "UI Audit – Fill Checklist",
+      "description": "Run the UI audit and fill the automated checklist only. Provide site_url when invoking.",
       "arguments": [
         {
           "name": "site_url",
           "description": "Application URL to audit",
           "required": true
-        },
+        }
+      ],
+      "message": "Call the ui_audit_analyzer tool and follow its steps to fill the automated checklist only. App URL: {{site_url}}. Output: UI-Audit-Checklist.csv. Do not generate summary, metrics, or other artifacts."
+    },
+    {
+      "name": "generate-report",
+      "title": "Generate Report from Checklists",
+      "description": "Combine the automated checklist and manual checklist and generate all required artifacts (summary, metrics). Provide manual_audit_checklist and output_directory when invoking.",
+      "arguments": [
         {
           "name": "manual_audit_checklist",
-          "description": "Manual audit checklist to use when generating the reports, metrics, and other artifacts",
+          "description": "Path or reference to the manual audit checklist file (e.g. UI-Audit-Manual-Checklist.csv or path to the filled manual checklist)",
           "required": true
         },
         {
           "name": "output_directory",
-          "description": "Output directory to use when generating the reports, metrics, and other artifacts",
+          "description": "Output directory for generated artifacts",
           "required": true
         }
       ],
-      "message": "Perform UI audit for this codebase. Output directory: {{output_directory}}. App URL: {{site_url}}. Use the already-filled manual checklist at {{manual_audit_checklist}} when generating the reports, metrics, and other artifacts."
+      "message": "Inputs: automated checklist (UI-Audit-Checklist.csv), manual checklist at {{manual_audit_checklist}}. Output directory: {{output_directory}}. (1) Summary: use resource 'ui-audit-summary-template.md' → audit-summary.md, fill from both checklists; preserve template structure. (2) Metrics: use resource 'metrics.csv' → UI-Audit-Metrics.csv; populate every key from both checklists. topIssues: rank by severity (Critical → High → Medium), unique id (e.g. A11Y-001), severity, id, description, subcategory, location.file, location.line, category; topIssues.count = actual count (max 10). componentsRequiringAttention: name, path, failedChecks, criticalFailures, healthScore (0–100); count (max 10). Preserve all keys and row order. (3) Call 'validate_required_artifacts' with all generated artifacts plus {{manual_audit_checklist}}. On failure, regenerate only failing artifacts and rerun until pass=true."
     }
   ],
   "dependencies": {
