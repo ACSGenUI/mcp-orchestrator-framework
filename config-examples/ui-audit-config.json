@@ -1,7 +1,7 @@
 {
   "name": "ui-audit-framework",
-  "version": "2.0.0",
-  "description": "Simplified UI Audit Framework - populate checklist (last 2 columns only) and generate summary report",
+  "version": "3.1.0",
+  "description": "UI Audit Framework with categorized checklist batching, batch persistence, evidence requirements, and quality validation",
   "frameworks": {
     "mainAnalyser": {
       "enabled": true,
@@ -23,7 +23,7 @@
           ]
         }
       },
-      "mainPrompt": "## STEP 0 – Audit mode\nIf applicationUrl is provided: run BOTH URL-based audit (chrome-devtools, W3C validator) and code-based audit (eslint/stylelint/static analysis), otherwise run only code-based audit. Merge evidence from all runs.\n\n## STEP 1 – Execute directly\nRun all implied audits; never defer or recommend another audit. Do not output: \"Requires audit\", \"Cannot determine\", \"Requires Lighthouse/CSS/code audit\". When tool data is unavailable, simulate Lighthouse, Axe, ESLint, Stylelint, HTML Validator, and Performance internally and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence.\n\n## STEP 2 – Automated checklist only\nUse resource 'EDS_Audit_Checklist.csv'. Fill ONLY Implemented? and Comments. Rows with Tool Supported = Yes: use the listed tool and return Yes/No/Partial with evidence; use Manual Review Needed only when the tool cannot run or gives no signal. Run eslint/stylelint via project CLI (not MCP); use MCP for W3C validator, chrome-devtools. Do not change other columns; keep all rows. Save as 'UI-Audit-Checklist.csv'. Do not generate summary, metrics, or manual-checklist steps here."
+      "mainPrompt": "## STEP 0 – Audit mode\nIf applicationUrl is provided: run BOTH URL-based audit (chrome-devtools, W3C validator) and code-based audit (eslint/stylelint/static analysis), otherwise run only code-based audit. Merge evidence from all runs.\n\n## STEP 1 – Execute directly\nRun all implied audits; never defer or recommend another audit. Do not output: \"Requires audit\", \"Cannot determine\", \"Requires Lighthouse/CSS/code audit\". When tool data is unavailable, simulate Lighthouse, Axe, ESLint, Stylelint, HTML Validator, and Performance internally and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence.\n\n## STEP 2 – Category-by-category checklist workflow\nRead the resource 'checklist/index' to get the list of checklist categories and their item counts. Then process each category sequentially:\n\n### For each category:\n1. **Read** the category resource (e.g. 'checklist/development', 'checklist/accessibility', etc.)\n2. **Inspect** – For each item in this category, inspect the relevant files in the workspace or fetch the relevant part of the app URL. Gather concrete evidence.\n3. **Fill** – For each row, fill three columns:\n   - **Implemented? (Yes / No / NA)** – based on evidence found\n   - **Comments** – specific observation with concrete detail\n   - **Evidence** – MANDATORY: file path + line number, component name, URL element, or tool output that proves the finding\n4. **Write** – Call 'write_checklist_section' with the category name and completed batch CSV. The tool validates quality automatically and rejects the write if quality is insufficient. If rejected, redo the batch with more specific analysis and call write_checklist_section again.\n5. **Next** – Move to the next category. Do not start the next category until the current one is accepted by write_checklist_section.\n\nDo NOT call validate_checklist_quality directly — quality validation is handled automatically by write_checklist_section.\\n\\nRows with Tool Supported = Yes: use the listed tool and return Yes/No/Partial with evidence; use Manual Review Needed only when the tool cannot run or gives no signal. Run eslint/stylelint via project CLI (not MCP); use MCP for W3C validator, chrome-devtools.\n\nAfter all categories are accepted, call 'merge_checklist' to assemble the final UI-Audit-Checklist.csv. Do not generate summary, metrics, or manual-checklist steps here.\n\n## DIFFERENTIATION RULE\nNo two rows may have the same comment text. Each comment must reference a specific element from the codebase or application URL. If a check passes, explain *what* specifically was verified and where. If a check fails, cite the exact file, line, component, or URL element where the issue exists. Generic phrases like 'Looks good', 'No issues found', 'Compliant', or 'Implemented correctly' are NOT acceptable as comments."
     },
     "selfEvaluation": {
       "enabled": true,
@@ -118,6 +118,47 @@
       "title": "UI Audit Artifact Validation",
       "description": "Executable validation for required UI audit artifacts",
       "toolName": "validate_required_artifacts"
+    },
+    "categorizedChecklist": {
+      "enabled": true,
+      "templatePath": "templates/ui-audit/EDS_Audit_Checklist.csv",
+      "groupByField": "Phase"
+    },
+    "templateTools": {
+      "enabled": true,
+      "tools": [
+        {
+          "toolName": "get_summary_template",
+          "title": "Get Summary Report Template",
+          "description": "Returns the audit summary markdown template. Call this only after the checklist is fully completed, when you are ready to synthesize the summary report.",
+          "templatePath": "templates/ui-audit/ui-audit-summary-template.md"
+        },
+        {
+          "toolName": "get_metrics_template",
+          "title": "Get Metrics Template",
+          "description": "Returns the audit metrics CSV template. Call this only after the checklist is fully completed, when you are ready to populate metrics.",
+          "templatePath": "templates/ui-audit/metrics.csv"
+        }
+      ]
+    },
+    "checklistBatchTools": {
+      "enabled": true,
+      "writeToolName": "write_checklist_section",
+      "mergeToolName": "merge_checklist"
+    },
+    "checklistQualityValidation": {
+      "enabled": true,
+      "toolName": "validate_checklist_quality",
+      "title": "Checklist Quality Validator",
+      "description": "Standalone quality validator for ad-hoc use. The primary workflow uses write_checklist_section which validates automatically.",
+      "duplicateThreshold": 0.05,
+      "genericPhrases": [
+        "not applicable", "n/a", "no issues found", "looks good", "pass",
+        "implemented correctly", "meets requirements", "compliant",
+        "no issues", "all good", "verified", "checked",
+        "works as expected", "functioning properly", "no problems",
+        "ok", "okay", "fine", "done", "complete", "yes"
+      ]
     }
   },
   "templates": {
@@ -128,7 +169,7 @@
     {
       "name": "ui_audit_analyser",
       "title": "UI Audit – Fill Checklist",
-      "description": "Run the UI audit and fill the automated checklist only. Provide site_url when invoking.",
+      "description": "Run the UI audit category-by-category and fill the automated checklist with evidence. Provide site_url when invoking.",
       "arguments": [
         {
           "name": "site_url",
@@ -136,7 +177,7 @@
           "required": true
         }
       ],
-      "message": "Call the ui_audit_analyzer tool and follow its steps to fill the automated checklist only. App URL: {{site_url}}. Output: UI-Audit-Checklist.csv. Do not generate summary, metrics, or other artifacts."
+      "message": "Call the ui_audit_analyzer tool and follow its multi-step category workflow to fill the automated checklist. App URL: {{site_url}}.\n\nWorkflow:\n1. Read 'checklist/index' to see all categories\n2. For each category: read the category resource → audit each item → fill Implemented?, Comments, and Evidence columns → call 'write_checklist_section' with the category name and completed batch CSV\n3. write_checklist_section validates quality automatically. If it rejects the write, redo that batch with specific evidence and resubmit\n4. After all categories are accepted, call 'merge_checklist' to assemble the final CSV\n\nOutput: UI-Audit-Checklist.csv (written to workspace by merge_checklist). Do not generate summary, metrics, or other artifacts."
     },
     {
       "name": "generate-report",
@@ -154,11 +195,11 @@
           "required": true
         }
       ],
-      "message": "Inputs: automated checklist (UI-Audit-Checklist.csv), manual checklist at {{manual_audit_checklist}}. Output directory: {{output_directory}}. (1) Summary: use resource 'ui-audit-summary-template.md' → audit-summary.md, fill from both checklists; preserve template structure. (2) Metrics: use resource 'metrics.csv' → UI-Audit-Metrics.csv; populate every key from both checklists. topIssues: rank by severity (Critical → High → Medium), unique id (e.g. A11Y-001), severity, id, description, subcategory, location.file, location.line, category; topIssues.count = actual count (max 10). componentsRequiringAttention: name, path, failedChecks, criticalFailures, healthScore (0–100); count (max 10). Preserve all keys and row order. (3) Call 'validate_required_artifacts' with all generated artifacts plus {{manual_audit_checklist}}. On failure, regenerate only failing artifacts and rerun until pass=true."
+      "message": "Read UI-Audit-Checklist.csv from the workspace root (generated by the audit step). Read the manual checklist from {{manual_audit_checklist}}. Output directory: {{output_directory}}.\n\n(1) Summary: call 'get_summary_template' to retrieve the template → audit-summary.md, fill from both checklists; preserve template structure.\n(2) Metrics: call 'get_metrics_template' to retrieve the template → UI-Audit-Metrics.csv; populate every key from both checklists. topIssues: rank by severity (Critical → High → Medium), unique id (e.g. A11Y-001), severity, id, description, subcategory, location.file, location.line, category; topIssues.count = actual count (max 10). componentsRequiringAttention: name, path, failedChecks, criticalFailures, healthScore (0–100); count (max 10). Preserve all keys and row order.\n(3) Call 'validate_required_artifacts' with all generated artifacts plus {{manual_audit_checklist}}. On failure, regenerate only failing artifacts and rerun until pass=true."
     }
   ],
   "dependencies": {
-    "framework": "2.0.1",
+    "framework": "3.1.0",
     "mcpTools": {
       "webresearch": "required",
       "chrome-devtools": "required",

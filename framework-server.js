@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve, isAbsolute, basename } from 'path';
 import https from 'https';
@@ -302,6 +302,27 @@ class FrameworkServer {
     // Setup template mapping framework
     if (this.config.frameworks.templateMapping?.enabled) {
       this.setupTemplateMappingFramework();
+    }
+
+    // Setup categorized checklist resources (split by Phase).
+    // ORDERING: Must run before setupChecklistBatchTools, which depends on this.checklistCategories.
+    if (this.config.frameworks.categorizedChecklist?.enabled) {
+      this.setupCategorizedChecklistResources();
+    }
+
+    // Setup on-demand template tools (summary, metrics)
+    if (this.config.frameworks.templateTools?.enabled) {
+      this.setupTemplateTools();
+    }
+
+    // Setup checklist batch tools (write_checklist_section + merge_checklist)
+    if (this.config.frameworks.checklistBatchTools?.enabled) {
+      this.setupChecklistBatchTools();
+    }
+
+    // Setup standalone checklist quality validation tool
+    if (this.config.frameworks.checklistQualityValidation?.enabled) {
+      this.setupChecklistQualityValidation();
     }
 
     // Setup template resources
@@ -1167,6 +1188,471 @@ Validation result must return pass=true before finalizing output.
     }, async () => ({
       content: [{ type: "text", text: getTemplateMappingContent() }]
     }));
+  }
+
+  /**
+   * Split the main checklist CSV by Phase and register each as a separate resource.
+   * Resources are named like checklist/development, checklist/accessibility, etc.
+   * The full checklist resource is still registered by setupTemplateResources.
+   */
+  setupCategorizedChecklistResources() {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const checklistConfig = this.config.frameworks.categorizedChecklist;
+    if (!checklistConfig?.enabled) return;
+
+    const templatePath = checklistConfig.templatePath || 'templates/ui-audit/EDS_Audit_Checklist.csv';
+    const absolutePath = join(__dirname, templatePath);
+    if (!existsSync(absolutePath)) {
+      console.error(`Categorized checklist template not found: ${absolutePath}`);
+      return;
+    }
+
+    const csvContent = readFileSync(absolutePath, 'utf8');
+    const { headers, rows } = this.parseCSV(csvContent);
+    const phaseField = checklistConfig.groupByField || 'Phase';
+
+    // Group rows by phase
+    const categories = {};
+    for (const row of rows) {
+      const phase = row[phaseField] || 'Uncategorized';
+      if (!categories[phase]) categories[phase] = [];
+      categories[phase].push(row);
+    }
+
+    // Store category names for use by prompts
+    this.checklistCategories = Object.keys(categories);
+
+    const escapeCSV = (val) => {
+      const str = String(val || '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const headerLine = headers.join(',');
+
+    for (const [phase, phaseRows] of Object.entries(categories)) {
+      const slug = phase.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const resourceName = `checklist/${slug}`;
+      const uri = `checklist:///${slug}`;
+      const csvData = [headerLine, ...phaseRows.map(row => headers.map(h => escapeCSV(row[h])).join(','))].join('\n');
+
+      this.server.resource(
+        resourceName,
+        uri,
+        {
+          description: `UI Audit Checklist – ${phase} category (${phaseRows.length} items)`,
+          mimeType: 'text/csv'
+        },
+        async (resourceUri) => ({
+          contents: [{
+            uri: resourceUri.toString(),
+            mimeType: 'text/csv',
+            text: csvData
+          }]
+        })
+      );
+    }
+
+    // Register a category index resource so the LLM knows what categories exist
+    const indexText = this.checklistCategories.map((phase, i) => {
+      const slug = phase.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const count = categories[phase].length;
+      return `${i + 1}. checklist/${slug} — ${phase} (${count} items)`;
+    }).join('\n');
+
+    this.server.resource(
+      'checklist/index',
+      'checklist:///index',
+      {
+        description: 'Index of all checklist categories with item counts',
+        mimeType: 'text/plain'
+      },
+      async (resourceUri) => ({
+        contents: [{
+          uri: resourceUri.toString(),
+          mimeType: 'text/plain',
+          text: `# Checklist Categories\n\n${indexText}\n\nTotal items: ${rows.length}\n\nProcess each category sequentially. Read one category resource, audit all its items, then move to the next.`
+        }]
+      })
+    );
+  }
+
+  /**
+   * Register tools to serve summary and metrics templates on-demand,
+   * so they are not preloaded alongside the checklist.
+   */
+  setupTemplateTools() {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const templateToolsConfig = this.config.frameworks.templateTools;
+    if (!templateToolsConfig?.enabled) return;
+
+    const tools = templateToolsConfig.tools || [];
+    for (const toolDef of tools) {
+      const absolutePath = join(__dirname, toolDef.templatePath);
+      this.server.registerTool(toolDef.toolName, {
+        title: toolDef.title,
+        description: toolDef.description,
+      }, async () => {
+        try {
+          const content = readFileSync(absolutePath, 'utf8');
+          return {
+            content: [{ type: 'text', text: content }]
+          };
+        } catch (error) {
+          return {
+            content: [{ type: 'text', text: `Error loading template: ${error.message}` }],
+            isError: true
+          };
+        }
+      });
+    }
+  }
+
+  /**
+   * Register write_checklist_section and merge_checklist tools.
+   * write_checklist_section persists a completed category batch to disk after
+   * running built-in quality validation. merge_checklist assembles all persisted
+   * batches into the final UI-Audit-Checklist.csv.
+   */
+  setupChecklistBatchTools() {
+    const batchConfig = this.config.frameworks.checklistBatchTools;
+    if (!batchConfig?.enabled) return;
+
+    const qualityConfig = this.config.frameworks.checklistQualityValidation || {};
+    const duplicateThreshold = qualityConfig.duplicateThreshold || 0.05;
+    const genericPhrases = qualityConfig.genericPhrases || [
+      'not applicable', 'n/a', 'no issues found', 'looks good', 'pass',
+      'implemented correctly', 'meets requirements', 'compliant',
+      'no issues', 'all good', 'verified', 'checked'
+    ];
+
+    // In-memory store for completed batches keyed by category slug
+    this.completedBatches = new Map();
+
+    const writeTool = batchConfig.writeToolName || 'write_checklist_section';
+    const mergeTool = batchConfig.mergeToolName || 'merge_checklist';
+
+    // --- write_checklist_section ---
+    this.server.registerTool(writeTool, {
+      title: 'Write Checklist Section',
+      description: 'Persist a completed checklist category batch. Runs built-in quality validation — rejects the write if quality is insufficient. Call this once per category after filling all rows.',
+      inputSchema: {
+        category: z.string().describe('Category name exactly as listed in checklist/index (e.g. "Development", "Accessibility")'),
+        checklist_csv: z.string().describe('Completed CSV content for this category batch (header + data rows)')
+      }
+    }, async ({ category, checklist_csv }) => {
+      // Validate category is known
+      if (this.checklistCategories && this.checklistCategories.length > 0) {
+        if (!this.checklistCategories.includes(category)) {
+          return {
+            content: [{ type: 'text', text: `## Write Rejected\n\nUnknown category "${category}". Valid categories: ${this.checklistCategories.join(', ')}` }],
+            isError: true
+          };
+        }
+      }
+
+      // Parse submitted CSV
+      let parsed;
+      try {
+        parsed = this.parseCSV(checklist_csv);
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `## Write Rejected\n\nCould not parse CSV: ${err.message}` }],
+          isError: true
+        };
+      }
+
+      if (parsed.rows.length === 0) {
+        return {
+          content: [{ type: 'text', text: `## Write Rejected\n\nCSV has no data rows.` }],
+          isError: true
+        };
+      }
+
+      // Run quality validation inline
+      const qualityResult = this._validateBatchQuality(parsed, category, duplicateThreshold, genericPhrases);
+
+      if (!qualityResult.pass) {
+        return {
+          content: [{ type: 'text', text: qualityResult.message }],
+          structuredContent: qualityResult.report,
+          isError: true
+        };
+      }
+
+      // Store the batch
+      this.completedBatches.set(category, {
+        headers: parsed.headers,
+        rows: parsed.rows,
+        csv: checklist_csv,
+        writtenAt: new Date().toISOString()
+      });
+
+      return {
+        content: [{
+          type: 'text',
+          text: `## Batch Accepted: ${category}\n\nQuality validation passed. ${parsed.rows.length} rows stored.\nCompleted categories: ${[...this.completedBatches.keys()].join(', ')}\nRemaining: ${(this.checklistCategories || []).filter(c => !this.completedBatches.has(c)).join(', ') || 'none'}`
+        }],
+        structuredContent: { pass: true, category, rowCount: parsed.rows.length, storedCategories: [...this.completedBatches.keys()] }
+      };
+    });
+
+    // --- merge_checklist ---
+    this.server.registerTool(mergeTool, {
+      title: 'Merge Checklist Batches',
+      description: 'Assemble all persisted category batches into the final UI-Audit-Checklist.csv and write it to the workspace. Call after all categories are written via write_checklist_section.',
+      inputSchema: {
+        output_path: z.string().optional().describe('Output file path relative to workspace (default: UI-Audit-Checklist.csv)')
+      }
+    }, async ({ output_path } = {}) => {
+      const expectedCategories = this.checklistCategories || [];
+      const missing = expectedCategories.filter(c => !this.completedBatches.has(c));
+
+      if (missing.length > 0) {
+        return {
+          content: [{ type: 'text', text: `## Merge Blocked\n\nMissing categories: ${missing.join(', ')}\n\nComplete all categories via write_checklist_section before merging.` }],
+          isError: true
+        };
+      }
+
+      if (this.completedBatches.size === 0) {
+        return {
+          content: [{ type: 'text', text: '## Merge Blocked\n\nNo batches have been written yet.' }],
+          isError: true
+        };
+      }
+
+      // Headers come from the first batch. All batches share the same template columns
+      // because they originate from the same EDS_Audit_Checklist.csv split by Phase.
+      // If the template changes, write_checklist_section ensures each batch has valid headers.
+      const firstBatch = this.completedBatches.values().next().value;
+      if (!firstBatch || !firstBatch.headers || firstBatch.headers.length === 0) {
+        return {
+          content: [{ type: 'text', text: '## Merge Failed\n\nFirst batch has no valid headers. Re-run write_checklist_section for all categories.' }],
+          isError: true
+        };
+      }
+      const headers = firstBatch.headers;
+
+      const escapeCSV = (val) => {
+        const str = String(val || '');
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+
+      // Merge rows in category order
+      const allRows = [];
+      for (const cat of expectedCategories) {
+        const batch = this.completedBatches.get(cat);
+        if (batch) allRows.push(...batch.rows);
+      }
+
+      const headerLine = headers.join(',');
+      const csvLines = allRows.map(row => headers.map(h => escapeCSV(row[h])).join(','));
+      const finalCSV = [headerLine, ...csvLines].join('\n');
+
+      // Write to disk
+      const outputFile = output_path || 'UI-Audit-Checklist.csv';
+      const outputAbsPath = isAbsolute(outputFile) ? outputFile : resolve(process.cwd(), outputFile);
+      try {
+        const outputDir = dirname(outputAbsPath);
+        if (!existsSync(outputDir)) {
+          mkdirSync(outputDir, { recursive: true });
+        }
+        writeFileSync(outputAbsPath, finalCSV, 'utf8');
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `## Merge Failed\n\nCould not write file: ${err.message}` }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: `## Checklist Merged Successfully\n\nFile: ${outputFile}\nTotal rows: ${allRows.length}\nCategories: ${[...this.completedBatches.keys()].join(', ')}\n\nThe merged checklist is ready at the workspace root.`
+        }],
+        structuredContent: {
+          pass: true,
+          outputFile,
+          totalRows: allRows.length,
+          categories: [...this.completedBatches.keys()]
+        }
+      };
+    });
+  }
+
+  /**
+   * Shared quality validation logic used by both write_checklist_section (inline)
+   * and validate_checklist_quality (standalone).
+   */
+  _validateBatchQuality(parsed, categoryName, duplicateThreshold, genericPhrases) {
+    const { headers, rows } = parsed;
+    const commentsCol = headers.find(h => h.toLowerCase().includes('comments'));
+    const evidenceCol = headers.find(h => h.toLowerCase().includes('evidence'));
+    const statusCol = headers.find(h => h.toLowerCase().includes('implemented'));
+
+    // Fail early if critical columns are missing from the CSV headers
+    const missingCols = [];
+    if (!commentsCol) missingCols.push('Comments');
+    if (!evidenceCol) missingCols.push('Evidence');
+    if (!statusCol) missingCols.push('Implemented? (Yes / No / NA)');
+    if (missingCols.length > 0) {
+      const message = `## Checklist Quality Validation: FAIL\n\nCategory: ${categoryName || 'all'}\nMissing required columns: ${missingCols.join(', ')}\nFound columns: ${headers.join(', ')}\n\n**Action required:** Ensure your CSV includes all required columns: Comments, Evidence, and Implemented? (Yes / No / NA).`;
+      return { pass: false, message, report: { pass: false, category: categoryName || 'all', missingColumns: missingCols } };
+    }
+
+    const issues = [];
+    const commentCounts = {};
+    let emptyEvidenceCount = 0;
+    let filledRowCount = 0;
+
+    for (const row of rows) {
+      const status = (row[statusCol] || '').trim().toLowerCase();
+      if (!status || status === 'na') continue;
+      filledRowCount++;
+
+      const comment = (row[commentsCol] || '').trim();
+      const evidence = (row[evidenceCol] || '').trim();
+
+      if (comment) {
+        const normalizedComment = comment.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        commentCounts[normalizedComment] = (commentCounts[normalizedComment] || 0) + 1;
+      }
+
+      if (!evidence) {
+        emptyEvidenceCount++;
+      }
+
+      const commentLower = comment ? comment.toLowerCase().trim() : '';
+      if (commentLower && genericPhrases.some(phrase => commentLower.includes(phrase))) {
+        issues.push({
+          type: 'generic_comment',
+          row: row['Checklist Item'] || 'Unknown',
+          comment
+        });
+      }
+    }
+
+    // Exact duplicates
+    const duplicateComments = Object.entries(commentCounts)
+      .filter(([_, count]) => count > 1)
+      .map(([comment, count]) => ({ comment: comment.substring(0, 80), occurrences: count }));
+
+    const totalDuplicateRows = duplicateComments.reduce((sum, d) => sum + d.occurrences, 0);
+    const duplicateRatio = filledRowCount > 0 ? totalDuplicateRows / filledRowCount : 0;
+    const emptyEvidenceRatio = filledRowCount > 0 ? emptyEvidenceCount / filledRowCount : 0;
+
+    // Near-duplicate detection via Jaccard similarity on word sets
+    const uniqueComments = Object.keys(commentCounts);
+    const nearDuplicatePairs = [];
+    for (let i = 0; i < uniqueComments.length; i++) {
+      const wordsA = new Set(uniqueComments[i].split(/\s+/).filter(w => w.length > 2));
+      for (let j = i + 1; j < uniqueComments.length; j++) {
+        const wordsB = new Set(uniqueComments[j].split(/\s+/).filter(w => w.length > 2));
+        const intersection = [...wordsA].filter(w => wordsB.has(w)).length;
+        const union = new Set([...wordsA, ...wordsB]).size;
+        if (union > 0 && intersection / union > 0.7) {
+          nearDuplicatePairs.push({
+            a: uniqueComments[i].substring(0, 60),
+            b: uniqueComments[j].substring(0, 60),
+            similarity: Math.round((intersection / union) * 100) + '%'
+          });
+        }
+      }
+    }
+
+    const pass = duplicateRatio <= duplicateThreshold
+      && emptyEvidenceRatio <= 0.3
+      && issues.length <= (filledRowCount * 0.1)
+      && nearDuplicatePairs.length <= Math.ceil(filledRowCount * 0.1);
+
+    const report = {
+      pass,
+      category: categoryName || 'all',
+      totalRows: rows.length,
+      filledRows: filledRowCount,
+      duplicateCommentRatio: Math.round(duplicateRatio * 100) + '%',
+      emptyEvidenceRatio: Math.round(emptyEvidenceRatio * 100) + '%',
+      duplicateComments: duplicateComments.slice(0, 10),
+      nearDuplicatePairs: nearDuplicatePairs.slice(0, 10),
+      genericComments: issues.slice(0, 10),
+      emptyEvidenceCount
+    };
+
+    const statusText = pass ? 'PASS' : 'FAIL';
+    let message = `## Checklist Quality Validation: ${statusText}\n\n`;
+    message += `Category: ${categoryName || 'all'}\n`;
+    message += `Filled rows: ${filledRowCount}/${rows.length}\n`;
+    message += `Duplicate comment ratio: ${report.duplicateCommentRatio} (threshold: ${Math.round(duplicateThreshold * 100)}%)\n`;
+    message += `Empty evidence ratio: ${report.emptyEvidenceRatio} (threshold: 30%)\n`;
+    message += `Near-duplicate pairs: ${nearDuplicatePairs.length}\n`;
+
+    if (!pass) {
+      message += `\n### Issues Found\n\n`;
+      if (duplicateRatio > duplicateThreshold) {
+        message += `**Duplicate comments detected** — ${totalDuplicateRows} rows share identical comment text. Each row must have a unique comment referencing specific code/URL evidence.\n\n`;
+        for (const d of duplicateComments.slice(0, 5)) {
+          message += `- "${d.comment}..." appears ${d.occurrences} times\n`;
+        }
+        message += '\n';
+      }
+      if (nearDuplicatePairs.length > Math.ceil(filledRowCount * 0.1)) {
+        message += `**Near-duplicate comments detected** — ${nearDuplicatePairs.length} pairs of comments are >70% similar by word overlap.\n\n`;
+        for (const p of nearDuplicatePairs.slice(0, 5)) {
+          message += `- "${p.a}..." ≈ "${p.b}..." (${p.similarity})\n`;
+        }
+        message += '\n';
+      }
+      if (emptyEvidenceRatio > 0.3) {
+        message += `**Missing evidence** — ${emptyEvidenceCount} rows have no evidence. Every row must reference a specific file path, line number, component name, or URL element.\n\n`;
+      }
+      if (issues.length > 0) {
+        message += `**Generic comments** — ${issues.length} rows use generic phrases instead of specific observations.\n\n`;
+      }
+      message += `\n**Action required:** Redo this batch with more specific analysis. Each comment must reference concrete evidence from the codebase or application URL.`;
+    }
+
+    return { pass, message, report };
+  }
+
+  /**
+   * Register a standalone validate_checklist_quality tool for ad-hoc use.
+   * The primary workflow path goes through write_checklist_section with built-in validation.
+   */
+  setupChecklistQualityValidation() {
+    const qualityConfig = this.config.frameworks.checklistQualityValidation;
+    if (!qualityConfig?.enabled) return;
+
+    const toolName = qualityConfig.toolName || 'validate_checklist_quality';
+    const duplicateThreshold = qualityConfig.duplicateThreshold || 0.05;
+    const genericPhrases = qualityConfig.genericPhrases || [
+      'not applicable', 'n/a', 'no issues found', 'looks good', 'pass',
+      'implemented correctly', 'meets requirements', 'compliant',
+      'no issues', 'all good', 'verified', 'checked'
+    ];
+
+    this.server.registerTool(toolName, {
+      title: qualityConfig.title || 'Checklist Quality Validator',
+      description: qualityConfig.description || 'Standalone quality validator for ad-hoc use. The primary workflow uses write_checklist_section which validates automatically.',
+      inputSchema: {
+        checklist_csv: z.string().describe('The completed checklist CSV content (or a single category batch) to validate'),
+        category_name: z.string().optional().describe('Name of the category being validated')
+      }
+    }, async ({ checklist_csv, category_name }) => {
+      const parsed = this.parseCSV(checklist_csv);
+      const result = this._validateBatchQuality(parsed, category_name, duplicateThreshold, genericPhrases);
+      return {
+        content: [{ type: 'text', text: result.message }],
+        structuredContent: result.report
+      };
+    });
   }
 
   setupTemplateResources() {
