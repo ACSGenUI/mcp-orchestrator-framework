@@ -169,15 +169,20 @@
     {
       "name": "ui_audit_analyser",
       "title": "UI Audit – Fill Checklist",
-      "description": "13-March-2026/v15 Run the UI audit category-by-category and fill the automated checklist with evidence. Provide site_url when invoking.",
+      "description": "14-March-2026/v16 Run the UI audit category-by-category and fill the automated checklist with evidence. Provide site_url when invoking.",
       "arguments": [
         {
           "name": "site_url",
           "description": "Application URL to audit",
           "required": true
+        },
+        {
+          "name": "output_directory",
+          "description": "Output directory for generated artifacts",
+          "required": true
         }
       ],
-      "message": "Call the ui_audit_analyzer tool and follow its multi-step category workflow to fill the automated checklist. App URL: {{site_url}}.\n\nWorkflow:\n1. Read 'checklist/index' to see all categories\n2. For each category: read the category resource → audit each item → fill Implemented?, Comments, and Evidence columns → call 'write_checklist_section' with the category name and completed batch CSV\n3. write_checklist_section validates quality automatically. If it rejects the write, redo that batch with specific evidence and resubmit\n4. After all categories are accepted, call 'merge_checklist' to assemble the final CSV\n\nOutput: UI-Audit-Checklist.csv (written to workspace by merge_checklist). Do not generate summary, metrics, or other artifacts."
+      "message": "Call the ui_audit_analyzer tool and follow its multi-step category workflow to fill the automated checklist. Output directory: {{output_directory}}. App URL: {{site_url}}.\n\nWorkflow:\n1. Read 'checklist/index' to see all categories\n2. For each category: read the category resource → audit each item → fill Implemented?, Comments, and Evidence columns → call 'write_checklist_section' with the category name and completed batch CSV\n3. write_checklist_section validates quality automatically. If it rejects the write, redo that batch with specific evidence and resubmit\n4. After all categories are accepted, call 'merge_checklist' to assemble the final CSV\n\nOutput: UI-Audit-Checklist.csv (written to workspace by merge_checklist). Do not generate summary, metrics, or other artifacts."
     },
     {
       "name": "generate-report",
