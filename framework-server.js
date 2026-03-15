@@ -1201,6 +1201,60 @@ Validation result must return pass=true before finalizing output.
     const checklistConfig = this.config.frameworks.categorizedChecklist;
     if (!checklistConfig?.enabled) return;
 
+    const escapeCSV = (val) => {
+      const str = String(val || '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    // ── Individual-files mode ──────────────────────────────────────────────
+    if (checklistConfig.mode === 'individual' && Array.isArray(checklistConfig.individualFiles)) {
+      const categories = {};
+
+      for (const entry of checklistConfig.individualFiles) {
+        const absPath = join(__dirname, entry.path);
+        if (!existsSync(absPath)) {
+          console.error(`Checklist template not found: ${absPath}`);
+          continue;
+        }
+        const { headers, rows } = this.parseCSV(readFileSync(absPath, 'utf8'));
+        const headerLine = headers.join(',');
+        const csvData = [headerLine, ...rows.map(row => headers.map(h => escapeCSV(row[h])).join(','))].join('\n');
+        categories[entry.name] = { rows, csvData };
+
+        const slug = entry.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        const capturedCsvData = csvData;
+        this.server.resource(
+          `checklist/${slug}`,
+          `checklist:///${slug}`,
+          { description: `UI Audit Checklist – ${entry.name} (${rows.length} items)`, mimeType: 'text/csv' },
+          async (resourceUri) => ({
+            contents: [{ uri: resourceUri.toString(), mimeType: 'text/csv', text: capturedCsvData }]
+          })
+        );
+      }
+
+      this.checklistCategories = Object.keys(categories);
+      const totalRows = Object.values(categories).reduce((s, c) => s + c.rows.length, 0);
+      const indexText = this.checklistCategories.map((name, i) => {
+        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        return `${i + 1}. checklist/${slug} — ${name} (${categories[name].rows.length} items)`;
+      }).join('\n');
+
+      this.server.resource(
+        'checklist/index', 'checklist:///index',
+        { description: 'Index of all checklist categories with item counts', mimeType: 'text/plain' },
+        async (resourceUri) => ({
+          contents: [{ uri: resourceUri.toString(), mimeType: 'text/plain',
+            text: `# Checklist Categories\n\n${indexText}\n\nTotal items: ${totalRows}\n\nProcess each category sequentially. Read one category resource, audit all its items, then move to the next.` }]
+        })
+      );
+      return;
+    }
+
+    // ── Single-file / groupByField mode (default) ─────────────────────────
     const templatePath = checklistConfig.templatePath || 'templates/ui-audit/EDS_Audit_Checklist.csv';
     const absolutePath = join(__dirname, templatePath);
     if (!existsSync(absolutePath)) {
@@ -1222,14 +1276,6 @@ Validation result must return pass=true before finalizing output.
 
     // Store category names for use by prompts
     this.checklistCategories = Object.keys(categories);
-
-    const escapeCSV = (val) => {
-      const str = String(val || '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
 
     const headerLine = headers.join(',');
 
@@ -1336,15 +1382,21 @@ Validation result must return pass=true before finalizing output.
     const writeTool = batchConfig.writeToolName || 'write_checklist_section';
     const mergeTool = batchConfig.mergeToolName || 'merge_checklist';
 
+    const outputMode = batchConfig.outputMode || 'merge';
+    const perCategory = outputMode === 'per-category';
+
     // --- write_checklist_section ---
     this.server.registerTool(writeTool, {
       title: 'Write Checklist Section',
-      description: 'Persist a completed checklist category batch. Runs built-in quality validation — rejects the write if quality is insufficient. Call this once per category after filling all rows.',
+      description: perCategory
+        ? 'Validate and write a completed checklist category directly to its own CSV file (e.g. Development.csv). Runs built-in quality validation — rejects the write if quality is insufficient. Call once per category after filling all rows.'
+        : 'Persist a completed checklist category batch. Runs built-in quality validation — rejects the write if quality is insufficient. Call this once per category after filling all rows.',
       inputSchema: {
-        category: z.string().describe('Category name exactly as listed in checklist/index (e.g. "Development", "Accessibility")'),
-        checklist_csv: z.string().describe('Completed CSV content for this category batch (header + data rows)')
+        category: z.string().describe('Category name exactly as listed in checklist/index (e.g. "Development", "Accessibility", "Process & Governance")'),
+        checklist_csv: z.string().describe('Completed CSV content for this category (header + data rows)'),
+        ...(perCategory && { output_dir: z.string().optional().describe('Output directory to write the category CSV into (default: current working directory)') })
       }
-    }, async ({ category, checklist_csv }) => {
+    }, async ({ category, checklist_csv, output_dir }) => {
       // Validate category is known
       if (this.checklistCategories && this.checklistCategories.length > 0) {
         if (!this.checklistCategories.includes(category)) {
@@ -1384,7 +1436,7 @@ Validation result must return pass=true before finalizing output.
         };
       }
 
-      // Store the batch
+      // Store the batch in memory
       this.completedBatches.set(category, {
         headers: parsed.headers,
         rows: parsed.rows,
@@ -1392,12 +1444,36 @@ Validation result must return pass=true before finalizing output.
         writtenAt: new Date().toISOString()
       });
 
+      // In per-category mode, write directly to {category}.csv
+      let writtenFile = null;
+      if (perCategory) {
+        const safeFilename = category.replace(/[^a-zA-Z0-9_-]+/g, '-') + '.csv';
+        const baseDir = output_dir
+          ? (isAbsolute(output_dir) ? output_dir : resolve(process.cwd(), output_dir))
+          : process.cwd();
+        const filePath = resolve(baseDir, safeFilename);
+        try {
+          if (!existsSync(baseDir)) mkdirSync(baseDir, { recursive: true });
+          writeFileSync(filePath, checklist_csv, 'utf8');
+          writtenFile = filePath;
+        } catch (err) {
+          return {
+            content: [{ type: 'text', text: `## Write Failed\n\nQuality passed but could not write file: ${err.message}` }],
+            isError: true
+          };
+        }
+      }
+
+      const completedList = [...this.completedBatches.keys()].join(', ');
+      const remaining = (this.checklistCategories || []).filter(c => !this.completedBatches.has(c)).join(', ') || 'none';
+      const fileNote = writtenFile ? `\nFile written: ${writtenFile}` : '';
+
       return {
         content: [{
           type: 'text',
-          text: `## Batch Accepted: ${category}\n\nQuality validation passed. ${parsed.rows.length} rows stored.\nCompleted categories: ${[...this.completedBatches.keys()].join(', ')}\nRemaining: ${(this.checklistCategories || []).filter(c => !this.completedBatches.has(c)).join(', ') || 'none'}`
+          text: `## Section Accepted: ${category}\n\nQuality validation passed. ${parsed.rows.length} rows written.${fileNote}\nCompleted: ${completedList}\nRemaining: ${remaining}`
         }],
-        structuredContent: { pass: true, category, rowCount: parsed.rows.length, storedCategories: [...this.completedBatches.keys()] }
+        structuredContent: { pass: true, category, rowCount: parsed.rows.length, writtenFile, completedCategories: [...this.completedBatches.keys()] }
       };
     });
 
