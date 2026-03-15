@@ -1,23 +1,21 @@
 {
   "name": "ui-audit-framework",
   "version": "4.0.0",
-  "description": "UI Audit Framework – Code Audit Mode: static analysis, ESLint/Stylelint, and codebase inspection only. Browser/Lighthouse/devtools phase is separate.",
+  "description": "UI Audit Framework – Two-Phase Auto-Run: provide site_url and output_directory once; Phase 1 (Code Audit) runs immediately followed by Phase 2 (Chrome DevTools) with no pause. Run generate-report with output_directory to produce metrics and summary.",
   "frameworks": {
     "mainAnalyser": {
       "enabled": true,
       "title": "UI Audit Analyzer",
-      "description": "Comprehensive UI audit of web applications covering accessibility, performance, responsiveness, and code quality",
+      "description": "Phase 1 – Code Audit: static analysis, ESLint/Stylelint, and codebase inspection. Fills all non-Chrome DevTools rows; marks Chrome DevTools rows NA for Phase 2.",
       "toolName": "ui_audit_analyzer",
-      "role": "## Role Definition\nYou are a UI Audit Specialist responsible for comprehensive front-end quality assessment, accessibility compliance, performance optimization, and code quality validation.",
+      "role": "You are a UI Audit Specialist responsible for comprehensive front-end quality assessment, accessibility compliance, performance optimization, and code quality validation.",
       "inputModes": {
         "codebase": {
           "description": "Audit using the current mounted workspace/repository files via static analysis, ESLint, and Stylelint.",
-          "requiredInputs": [
-            "codebasePath"
-          ]
+          "requiredInputs": ["codebasePath"]
         }
       },
-      "mainPrompt": "# UI Audit Analyser – Code Audit Workflow Prompt\n\nUse this prompt for the **user-ui-audit-framework** UI audit analyser (Code Audit phase). It ensures **all** checklist categories (including **Development**) are filled before merge using codebase inspection only.\n\n## Codebase Rule\n\nAlways treat the current mounted workspace/repository as the source of truth. If workspace files are available, inspect them directly and do not say `source/repo not available`. Only use that wording when the session truly has no accessible repo files, and then name the exact missing file or directory.\n\n## STEP 0 – Audit mode\n\nThis is the **Code Audit phase only**. Run the codebase-based audit using static analysis, ESLint, Stylelint, and direct file inspection against the current workspace/repository. No browser, URL, chrome-devtools, Lighthouse, W3C validator, or network-based tools are used in this phase.\n\n## STEP 1 – Execute directly\n\nRun all code-based audits directly; never defer or recommend another audit. Do not output: \"Requires audit\", \"Cannot determine\", or \"Requires code audit\". When a CLI tool is unavailable (e.g., ESLint not installed), perform direct static inspection of the source files and report concrete findings. If data is insufficient, return: Status: Inconclusive; Reason; Exact missing file or evidence.\n\n**NA rule for browser-only items:** For checklist items that explicitly require a live URL, browser rendering, or network access (e.g. Lighthouse scores, HTTP response headers, Axe browser audit, Core Web Vitals measurements), mark as `NA` with a comment of the form: `Requires live URL testing – deferred to browser audit phase. [describe what was inspectable from code]`\n\n## STEP 2 – Category-by-category checklist workflow\n\nRead the resource **'checklist/index'** to get the list of checklist categories and their item counts. **You MUST process every category listed** in the exact order returned. This includes **Development** first; it may not be skipped or deferred.\n\n**Expected category sizes (268 items total):**\n| Category | Items | Processing note |\n|---|---|---|\n| Development | 171 | Work through in sub-passes of ≤30 rows to avoid context bloat; submit all 171 in one `write_checklist_section` call |\n| Accessibility | 26 | |\n| Security | 16 | |\n| Performance | 17 | |\n| Process & Governance | 38 | |\n\nIf the count of rows in your submitted batch CSV does not match the category size above, `write_checklist_section` will reject it. Fill every row before submitting.\n\n### For each category:\n\n1. **Read** the category resource (e.g. `checklist/development`, `checklist/accessibility`, `checklist/security`, `checklist/performance`, `checklist/process-governance`).\n2. **Inspect** – Audit every item using static analysis, ESLint/Stylelint CLI, and direct file inspection. For large categories (Development: 171 rows), work through the rows in mental sub-passes of ≤30 at a time to maintain accuracy, then assemble all rows into a single CSV before writing.\n3. **Fill** – For each row, fill:\n   - **Implemented? (Yes / No / NA)**\n   - **Comments** – specific observation with concrete detail\n   - **Evidence** – MANDATORY: file path + line number, component name, or tool output. For NA items: state reason and what code-level signal was examined.\n4. **Write** – Call `write_checklist_section` with the category name, the output_dir, and the complete filled CSV for that category. The tool validates quality and writes the file directly to `{output_dir}/{Category}.csv`. If rejected, fix the evidence and resubmit.\n5. **Next** – Move to the next category immediately after the write is accepted — no merge step needed.\n\nDo NOT call validate_checklist_quality directly — quality validation is handled automatically by write_checklist_section.\nDo NOT call merge_checklist — each category is written to its own file directly.\n\n## Tool Usage Guide\n\n### Project CLI tools (not MCP)\n\n- **eslint**: code quality and linting errors with file:line references\n- **stylelint**: CSS/SCSS issues with file:line references\n\n### Static codebase inspection\n\nDirect file reading and pattern matching for all categories:\n- **Development**: HTML/CSS/JS source files, package.json, tsconfig, build configs\n- **Accessibility**: ARIA attributes, semantic HTML, focus styles, prefers-reduced-motion in CSS source files\n- **Security**: Secrets/tokens in source, eval/innerHTML patterns, CSP meta tags, dependency audit (npm audit)\n- **Performance**: Bundle config, lazy loading attributes, font format declarations in CSS, image dimension attributes, unused import patterns\n- **Process & Governance**: File existence checks (.gitignore, README, CI config files, test files, lock files, .editorconfig, .env.example, etc.)\n\n### Mandatory tool-to-category mapping (code-only mode)\n\nBefore filling rows in a category, use the listed tools and techniques first.\n\n- **Development** category: MUST run eslint and stylelint via project CLI before filling rows. Use direct file inspection for all structural, CSS, and JS items.\n- **Accessibility** category: Inspect source HTML/CSS/JS for ARIA usage, semantic structure, focus styles, and reduced-motion media queries. For items requiring a running browser (Axe audit, contrast via screenshot, Tab traversal in headless browser), mark NA with reason.\n- **Security** category: Scan source files for secrets, dangerous JS patterns (eval, innerHTML, document.write), CSP meta tags, and dependency vulnerabilities via npm audit. For items requiring HTTP response headers, mark NA with reason.\n- **Performance** category: Inspect build/bundle config, CSS font declarations, image attributes, lazy loading, and code-level asset patterns. For Lighthouse/Core Web Vitals/network measurements, mark NA with reason.\n- **Process & Governance** category: Use file existence checks, config file inspection, and git repository metadata.\n\nDo NOT simulate or fabricate tool output. If a tool cannot run, perform equivalent manual static inspection and state what was inspected.\n\n## DIFFERENTIATION RULE\n\nNo two rows may have the same comment text. Each comment must reference a specific element from the codebase. If a check passes, explain *what* specifically was verified and where. If a check fails, cite the exact file, line, component, or element where the issue exists. Generic phrases like \"Looks good\", \"No issues found\", \"Compliant\", or \"Implemented correctly\" are NOT acceptable as comments."
+      "mainPrompt": "Code Audit phase only — no browser, no URL, no Chrome DevTools.\n\nAlways treat the mounted workspace as source of truth. Inspect files directly.\n\nRead `checklist/index` to discover all categories and their item counts. Process every category in order:\n1. Read the category resource.\n2. Rows where `Audit Type = Chrome DevTools`: mark `Implemented? = NA`, Comments = `Deferred to Chrome DevTools audit phase`, Evidence = `Deferred to Phase 2`. Do not evaluate.\n3. All other rows: audit via static analysis, ESLint/Stylelint CLI, and direct file inspection. Work in passes of ≤30 rows.\n4. Fill `Implemented?`, `Comments`, and `Evidence` for every row.\n5. Call `write_checklist_section` for each batch of ≤30 rows with category, output_dir, and header + rows. Each call writes one numbered batch file immediately to disk — no accumulation.\n6. Next category immediately.\n\nTools: run eslint + stylelint for Development; npm audit for Security; direct file inspection for all others.\nComments must cite a specific file, line, element, or tool output. Generic phrases ('Looks good', 'No issues', 'Compliant') are rejected. No two rows may share the same comment."
     },
     "selfEvaluation": {
       "enabled": true,
@@ -30,10 +28,8 @@
           "formula": "(Checklist Items Evaluated / Total Items) × 100",
           "target": 100,
           "weight": 3,
-          "description": "Checklists must be fully filled with no item in open status and no unfilled items. Every item must be evaluated and verified; none skipped, left blank, or in not verified status. Do not leave any item as manual review needed or NA unless the framework explicitly allows it; all items must be marked as implemented or not implemented.",
-          "templateRowSource": [
-            "ui_audit_checklist"
-          ]
+          "description": "Every checklist item must be evaluated — none skipped, left blank, or marked NA unless the framework explicitly allows it.",
+          "templateRowSource": ["ui_audit_checklist"]
         }
       },
       "overallScore": {
@@ -49,20 +45,9 @@
       "description": "Security guardrails for UI audit analysis",
       "toolName": "ui_audit_security_guardrails_framework",
       "inputValidation": {
-        "allowedDomains": [
-          "*"
-        ],
-        "blockedDomains": [
-          "localhost",
-          "127.0.0.1",
-          "0.0.0.0"
-        ],
-        "contentTypes": [
-          "text/html",
-          "application/json",
-          "text/plain",
-          "application/xml"
-        ]
+        "allowedDomains": ["*"],
+        "blockedDomains": ["localhost", "127.0.0.1", "0.0.0.0"],
+        "contentTypes": ["text/html", "application/json", "text/plain", "application/xml"]
       }
     },
     "requiredOutputArtifacts": {
@@ -71,46 +56,6 @@
       "description": "Required output artifacts for UI audit analysis",
       "toolName": "ui_audit_required_output_artifacts",
       "artifacts": [
-        {
-          "name": "checklist_development",
-          "type": "csv",
-          "filename": "Development.csv",
-          "template": "Development.csv",
-          "templatePath": "templates/ui-audit/categories/Development.csv",
-          "required": true
-        },
-        {
-          "name": "checklist_accessibility",
-          "type": "csv",
-          "filename": "Accessibility.csv",
-          "template": "Accessibility.csv",
-          "templatePath": "templates/ui-audit/categories/Accessibility.csv",
-          "required": true
-        },
-        {
-          "name": "checklist_security",
-          "type": "csv",
-          "filename": "Security.csv",
-          "template": "Security.csv",
-          "templatePath": "templates/ui-audit/categories/Security.csv",
-          "required": true
-        },
-        {
-          "name": "checklist_performance",
-          "type": "csv",
-          "filename": "Performance.csv",
-          "template": "Performance.csv",
-          "templatePath": "templates/ui-audit/categories/Performance.csv",
-          "required": true
-        },
-        {
-          "name": "checklist_process_governance",
-          "type": "csv",
-          "filename": "Process-Governance.csv",
-          "template": "Process-Governance.csv",
-          "templatePath": "templates/ui-audit/categories/Process-Governance.csv",
-          "required": true
-        },
         {
           "name": "audit_metrics",
           "type": "csv",
@@ -126,6 +71,15 @@
           "template": "ui-audit-summary-template.md",
           "templatePath": "templates/ui-audit/ui-audit-summary-template.md",
           "required": true
+        },
+        {
+          "name": "manual_audit_checklist",
+          "type": "csv",
+          "filename": "manual_audit_checklists.csv",
+          "userProvided": true,
+          "path": "audit/manual_audit_checklists.csv",
+          "required": true,
+          "description": "User-filled manual audit checklist. Status values: Pass/Fail/NA. Located at audit/manual_audit_checklists.csv relative to workspace root."
         }
       ]
     },
@@ -152,13 +106,13 @@
         {
           "toolName": "get_summary_template",
           "title": "Get Summary Report Template",
-          "description": "Returns the audit summary markdown template. Call this only after the checklist is fully completed, when you are ready to synthesize the summary report.",
+          "description": "Returns the audit summary markdown template. Call this when ready to synthesize the summary report.",
           "templatePath": "templates/ui-audit/ui-audit-summary-template.md"
         },
         {
           "toolName": "get_metrics_template",
           "title": "Get Metrics Template",
-          "description": "Returns the audit metrics CSV template. Call this only after the checklist is fully completed, when you are ready to populate metrics.",
+          "description": "Returns the audit metrics CSV template. Call this when ready to populate metrics.",
           "templatePath": "templates/ui-audit/metrics.csv"
         }
       ]
@@ -167,7 +121,7 @@
       "enabled": true,
       "outputMode": "per-category",
       "writeToolName": "write_checklist_section",
-      "mergeToolName": "merge_checklist"
+      "updateToolName": "update_checklist_section"
     },
     "checklistQualityValidation": {
       "enabled": true,
@@ -191,29 +145,28 @@
   "prompts": [
     {
       "name": "ui_audit_analyser",
-      "title": "UI Audit – Code Audit (Fill Checklist)",
-      "description": "15-March-2026/v3 Run the code-only audit category-by-category and fill the automated checklist using static analysis, ESLint, and Stylelint. No browser or URL tools used. Total: 268 items across 5 categories (Development: 171, Accessibility: 26, Security: 16, Performance: 17, Process & Governance: 38). Process large categories in sub-passes of ≤30 rows; submit per category.",
+      "title": "UI Audit – Full Run (Phase 1: Code Audit → Phase 2: Chrome DevTools)",
+      "description": "Full two-phase audit. Provide site_url and output_directory once — Phase 1 (code audit) then Phase 2 (Chrome DevTools) run back-to-back with no pause. Run generate-report afterward to produce metrics.",
       "arguments": [
         {
+          "name": "site_url",
+          "description": "Live URL of the site being audited (e.g. https://example.com)",
+          "required": true
+        },
+        {
           "name": "output_directory",
-          "description": "Output directory for generated artifacts",
+          "description": "Output directory for all audit artifacts — used for both phases",
           "required": true
         }
       ],
-      "message": "Call the ui_audit_analyzer tool and follow its category-by-category workflow. Output directory: {{output_directory}}.\n\nChecklist has 268 total items across 5 categories: Development (171), Accessibility (26), Security (16), Performance (17), Process & Governance (38).\n\nWorkflow:\n1. Read 'checklist/index' to confirm categories and item counts\n2. For each category:\n   a. Read the category resource\n   b. Audit every item using static analysis, ESLint/Stylelint CLI, and direct file inspection. For Development (171 rows), work through in mental sub-passes of ≤30 rows for accuracy, then assemble all rows into one CSV\n   c. Fill Implemented?, Comments, and Evidence for ALL rows\n   d. Call 'write_checklist_section' with: category name, output_dir={{output_directory}}, and the complete filled CSV\n   e. The tool validates and writes {Category}.csv directly to {{output_directory}}. If rejected, fix and resubmit\n3. Proceed to the next category — no merge step needed\n\nOutput: 5 CSV files written to {{output_directory}} (Development.csv, Accessibility.csv, Security.csv, Performance.csv, Process-Governance.csv). Do not generate summary, metrics, or other artifacts."
+      "message": "Site URL: {{site_url}}\nOutput directory: {{output_directory}}\n\nThere are exactly TWO mandatory phases. Both MUST complete before generate-report is called. Do NOT pause or prompt the user at any point.\n\n---\n\n# PHASE 1 – Code Audit\n\nCode inspection only — no browser, no Chrome DevTools.\n\n⛔ FILE CREATION RULES — strictly enforced:\n- The ONLY way to write files is via `write_checklist_section`. Do not use any other method.\n- Do NOT create Python scripts, shell scripts, or helper files of any kind.\n- Do NOT create intermediate CSV files (e.g. development_full.csv, development_cdt_rows.csv, Development-2-short.csv).\n- Do NOT write files directly to disk using any tool other than `write_checklist_section`.\n- Only valid output files are: `{Category}-N.csv` batch files produced by `write_checklist_section`.\n\n1. Read `checklist/index` to discover all categories and their item counts.\n2. For each category in order:\n   a. Read the category resource.\n   b. Rows where `Audit Type = Chrome DevTools`: mark `Implemented? = NA`, Comments = `Deferred to Chrome DevTools audit phase`, Evidence = `Deferred to Phase 2`. Do not evaluate.\n   c. All other rows: audit via static analysis, ESLint/Stylelint CLI, and direct file inspection. Work through rows in groups of ≤30 in your head — do NOT write them to any intermediate file.\n   d. Fill `Implemented?`, `Comments` (specific file/line/element/tool output), and `Evidence` for every row.\n   e. Call `write_checklist_section` for each group of ≤30 rows — pass category, output_dir={{output_directory}}, and header + filled rows. This is the ONLY write operation. Each call produces one numbered file immediately (e.g. Development-1.csv, Development-2.csv).\n   f. Next category immediately — no intermediate files, no scripts, no summaries.\n\nTools: eslint + stylelint for Development; npm audit for Security; direct file inspection for all others.\nNo two rows may share the same comment. Generic phrases ('Looks good', 'No issues', 'Compliant') are rejected.\n\n## PHASE 1 COMPLETION GATE — mandatory before proceeding\n\nBefore moving to Phase 2, verify every category from `checklist/index` has at least one batch file written in {{output_directory}} this session.\n\n- Go through the category list one by one.\n- If a category has no batch file written in this session (even if an old file exists from a previous run), audit it now and call `write_checklist_section` for each batch of ≤30 rows.\n- Do NOT skip a category because a plain CSV already exists — old files may be stale or incomplete.\n- Only when ALL categories have been freshly written in this session may you proceed.\n\n⚠️ PHASE 1 COMPLETE — all categories written. DO NOT call generate-report yet. Proceed to Phase 2 immediately.\n\n---\n\n# PHASE 2 – Chrome DevTools Browser Audit\n\n⚠️ This phase is NOT optional. CDT rows marked NA in Phase 1 are placeholders only — they MUST be filled here. Skipping Phase 2 means the audit is incomplete and generate-report MUST NOT be called.\n\n## Chrome DevTools MCP Error Handling\n\nBefore starting, if any Chrome DevTools MCP call fails with a browser conflict error (e.g. \"The browser is already running for ... chrome-profile. Use a different userDataDir or stop the running browser first\"), STOP immediately and notify the user:\n\n---\n⚠️ Phase 2 could not start — Chrome profile conflict detected.\n\nThe Chrome DevTools MCP cannot open a new browser because the profile is already in use.\n\nTo fix this, choose one of:\n1. **Close Chrome** — close all Chrome windows using that profile, then re-run Phase 2.\n2. **Use a different profile** — add `--userDataDir` to the `chrome-devtools` entry in your MCP config (`~/.cursor/mcp.json` or `~/.claude/mcp.json`) pointing to a dedicated path that is not in use:\n   - **macOS / Linux**: `\"--userDataDir=/tmp/chrome-audit-profile\"`\n   - **Windows**: `\"--userDataDir=C:\\\\Temp\\\\chrome-audit-profile\"`\n   Then restart the MCP server and re-run Phase 2.\n3. **Fill manually** — run Chrome DevTools yourself on {{site_url}} (Lighthouse, Performance, Network, Security panels), fill the CDT rows in the batch CSVs directly, then run `generate-report`.\n\nDo NOT proceed with Phase 2 until the conflict is resolved. Do NOT mark CDT rows NA due to this error.\n---\n\nStart immediately after all Phase 1 batches are written — no pause. Do NOT stop, do NOT write recommended next steps, do NOT create intermediate CSV files for CDT rows.\n\nContext rule: do NOT read any Phase 1 batch files. Do NOT write CDT rows to any intermediate file. Fill the rows in memory and call `update_checklist_section` directly — the tool scans all batch files for the category, updates CDT rows positionally, and writes back only the modified files.\n\n1. Read `checklist/index` to discover which categories have Chrome DevTools rows. Skip categories with none.\n2. For each category with CDT rows:\n   a. Read `checklist/{category}/chrome-devtools` — CDT rows only.\n   b. Open {{site_url}} in Chrome. Each row's Checklist Item text specifies the required DevTools panel — use it (Network, Performance, Lighthouse, Console, Security, Application, Coverage, Rendering, Elements > Accessibility, Device Toolbar, Sources, Memory, Layers).\n   c. Fill `Implemented?`, `Comments` (panel name + observed value), and `Evidence` (exact DevTools path + metric). Every CDT row MUST have a real value — 'NA', 'Deferred', or blank are not acceptable.\n   d. Call `update_checklist_section` immediately with category name, header + filled CDT rows only, output_dir={{output_directory}}. Do NOT save rows to a file first. Fix and resubmit if rejected.\n   e. Next category immediately — no pause, no summary, no recommendations.\n\nSame differentiation rule: every comment must cite a specific panel, metric, or finding.\n\n⚠️ PHASE 2 COMPLETE — Only now may generate-report be called.\n\n---\n\n# FINAL STEP — only after both phases above are fully done\n\nConfirm: (1) all write_checklist_section calls succeeded, (2) update_checklist_section was called for every category that had CDT rows, (3) no CDT row still reads 'Deferred to Phase 2'.\n\nOnce confirmed, notify the user:\n\n---\n✅ Both phases are complete. All batch files are written to {{output_directory}}.\n\nRun the **generate-report** prompt to produce the metrics and summary report.\n---"
     },
     {
       "name": "generate-report",
       "title": "Generate Report from Checklists",
-      "description": "Generate all required artifacts (summary, metrics) from the 5 automated category CSVs. Provide output_directory when invoking.",
-      "arguments": [
-        {
-          "name": "output_directory",
-          "description": "Directory containing the 5 category CSVs produced by the audit step",
-          "required": true
-        }
-      ],
-      "message": "Read the 5 category CSVs from {{output_directory}}: Development.csv, Accessibility.csv, Security.csv, Performance.csv, Process-Governance.csv. Output directory: {{output_directory}}.\n\nAll metrics MUST be derived from the `Mandatory` and `Implemented? (Yes / No / NA)` columns in the CSVs. Do not invent values. For any field that requires browser/Lighthouse/network data, write `NA – deferred to browser audit phase`.\n\n## Metric Calculation Rules\n\n**Column reference:**\n- `Implemented?` column values: `Yes`, `No`, `NA`\n- `Mandatory` column values: `Yes`, `No`\n- `Importance` column values: `Critical`, `High`, `Medium`, `Low`\n\n**Summary counts (across all 5 CSVs combined):**\n- `summary.totalChecks` = total row count\n- `summary.passed` = count where Implemented? = Yes\n- `summary.failed` = count where Implemented? = No\n- `summary.notApplicable` = count where Implemented? = NA\n- `summary.mandatoryFailed` = count where Mandatory = Yes AND Implemented? = No\n- `summary.criticalFailed` = count where Importance = Critical AND Implemented? = No\n- `summary.highFailed` = count where Importance = High AND Implemented? = No\n- `summary.autoFixablePercent` = NA – deferred to browser audit phase\n\n**Domain scores** (per category CSV, excluding NA rows):\n- Formula: `(Yes count / (total rows − NA rows)) × 100`, rounded to 1 decimal\n- `domains.accessibility.score` ← Accessibility.csv\n- `domains.security.score` ← Security.csv\n- `domains.performance.score` ← Performance.csv\n- `domains.codeQuality.score` ← Development.csv\n- `domains.cssArchitecture.*` ← Development.csv rows in CSS/Styling groups\n- `domains.javascriptArchitecture.*` ← Development.csv rows in JS groups\n- `domains.htmlSemantics.*` ← Development.csv rows in HTML/Semantics groups\n- `domains.forms.*` ← Development.csv rows in Forms group\n- `domains.seoSemantics.*` ← Development.csv rows in SEO group\n- `domains.ux.*` ← Development.csv rows in UX group\n\n**Per-domain detail counts:** count `No` rows in the relevant sub-group of each CSV. Use the `Group` and `Sub-Group` columns to identify the right rows. For fields with no matching sub-group in the CSV, write `NA`.\n\n**Browser-only fields** — write `NA – deferred to browser audit phase`:\n- domains.performance.lighthouseScore, lcpMs, cls, inpMs, ttfbMs, renderBlockingResources, unusedJsCssPercent, imageOptimizationIssues\n- domains.security.headers.* (all HTTP header fields)\n- domains.accessibility.colorContrastFailures, missingAltTextPercent, landmarkCoveragePercent\n- riskIndex.* (requires trend data)\n- trendSnapshot.* (requires historical data)\n\n**Overall scores:**\n- `overallScores.accessibilityScore` = domains.accessibility.score\n- `overallScores.securityScore` = domains.security.score\n- `overallScores.performanceScore` = domains.performance.score\n- `overallScores.codeQualityScore` = domains.codeQuality.score\n- `overallScores.uxComplianceScore` = score from UX-related rows in Development.csv\n- `overallScores.uiQualityScore` = weighted average of all domain scores (equal weights)\n- `overallStatus.ragRating` = Red if uiQualityScore < 60, Amber if 60–79, Green if ≥ 80\n\n**topIssues:** rows where Implemented? = No, ranked by Importance (Critical → High → Medium → Low), then by Mandatory = Yes first. Max 10. Fields: severity = Importance value, id = auto-generated (e.g. DEV-001, A11Y-001), description = Checklist Item, subcategory = Sub-Group, location.file = from Evidence column (extract file path if present), location.line = from Evidence column (extract line number if present), category = Phase.\n\n**componentsRequiringAttention:** group failed rows by the file path extracted from their Evidence column. For each unique file: name = filename, path = full path, failedChecks = total No rows for that file, criticalFailures = No rows with Importance = Critical, healthScore = (passed rows / total rows for that file) × 100. Max 10, sorted by criticalFailures desc.\n\n## Steps\n\n(1) Call 'get_summary_template' → fill audit-summary.md from all CSVs using the metric calculation rules above; preserve template structure.\n(2) Call 'get_metrics_template' → fill UI-Audit-Metrics.csv using the metric calculation rules above. Preserve all keys and row order.\n(3) Call 'validate_required_artifacts' with all generated artifacts. On failure, regenerate only failing artifacts and rerun until pass=true."
+      "description": "Standalone manual step — run this prompt after ui_audit_analyser completes both phases. Reads all batch CSV files from the audit output directory and produces UI-Audit-Metrics.csv and audit-summary.md. No arguments needed — values are carried from the audit session.",
+      "arguments": [],
+      "message": "Run automatically — do NOT pause or prompt the user at any step.\n\nRetrieve output_directory and site_url from the current session context. Do not ask the user to re-enter them.\n\n## STEP 0 — Metadata (run first, before reading any batch files)\n- metadata.appUrl = site_url from session context\n- metadata.projectName = last segment of `git rev-parse --show-toplevel`; fallback to output_directory folder name\n- metadata.repoUrl = `git config --get remote.origin.url`; NA if not a git repo\n- metadata.commitId = `git rev-parse --short HEAD`; NA if not a git repo\n- metadata.auditTimestamp = current ISO-8601 datetime\n- metadata.checklistVersion = 4.0.0\n- metadata.agentVersion = claude-sonnet-4-6\n\n## STEP 1 — Load templates and discover files\n1. Call `get_metrics_template` and `get_summary_template` — these define every field to populate.\n2. Call `list_audit_files` with output_dir from session context — returns all batch CSVs grouped by category.\n3. Read `audit/manual_audit_checklists.csv` from the workspace root. This is the user-filled manual checklist. Columns: Phase, Category, Sub-Category, Checklist Item, Severity, Review Type, Mandatory, Status (Pass/Fail/NA), Reviewer Comments. If the file does not exist, skip it and note the absence in the summary.\n\n## STEP 2 — Read and accumulate\n\n### Automated batch files\nRead each batch CSV one at a time. Accumulate counts; discard raw rows after each file.\n- Column mapping: Implemented? = Yes/No/NA, Importance = severity, Group/Sub-Group = domain grouping.\n\n### Manual checklist\nRead `audit/manual_audit_checklists.csv`. Treat Status values as: Pass → Yes, Fail → No, NA → NA. Treat Severity as Importance. Accumulate counts alongside the automated data.\n- Manual checklist phases (Visual Design, User Experience, Content Quality, Cross-Browser & Device, Responsive Design, Internationalization, Architecture & Code Review, SEO & Discoverability) contribute to `overallScores.uxComplianceScore` and any matching domain scores.\n- Where phases overlap with automated categories (Accessibility, Performance, Process & Governance), merge counts — do not double-count rows that are identical in both sources.\n\n## STEP 3 — Compute metrics (combined)\n- **Domain scores**: `(Yes / (Yes + No)) × 100` per domain across both sources. Map to `domains.*.score`.\n- **overallScores.uxComplianceScore**: score derived from manual checklist phases (Visual Design, UX, Content Quality, Cross-Browser, Responsive Design).\n- **Summary counts**: totalChecks, passed, failed, notApplicable, mandatoryFailed, criticalFailed — across both automated and manual rows combined.\n- **Numeric/count fields**: extract first number from Evidence or Comments (automated rows); from Reviewer Comments (manual rows). Yes/Pass → 0, No/Fail → extract number or use 1, NA → NA.\n- **CDT numeric fields** (lighthouseScore, lcpMs, cls, inpMs, ttfbMs, etc.): from Evidence of matching Chrome DevTools rows.\n- **Binary fields** (missingCsp, missingHsts, etc.): Yes/Pass → 0, No/Fail → 1, NA → NA.\n- **Top issues**: up to 10 rows where status = No/Fail, ordered Critical → High → Medium, Mandatory first. Include issues from both sources.\n- **Component health**: group No/Fail rows by file path from Evidence or Reviewer Comments. Top 10.\n- **Risk index**: 100 − domain.score per domain.\n- **RAG rating**: Green ≥ 80, Amber 60–79, Red < 60 based on uiQualityScore.\n\n## STEP 4 — Write and validate\nFill both templates completely. Any field with no source → NA. Do not leave fields blank.\nCall `validate_required_artifacts`. On failure, regenerate only failing artifacts and retry until pass = true."
     }
   ],
   "dependencies": {
@@ -223,6 +176,6 @@
       "stylelint": "required",
       "npm-audit": "optional"
     },
-    "note": "Browser/Lighthouse/devtools tools are intentionally excluded from this code audit phase. They will be added back in the browser audit phase."
+    "note": "Batch-file workflow: each write_checklist_section call writes one numbered batch file immediately (e.g. Development-1.csv). No consolidation. generate-report uses list_audit_files to discover all batch files and reads them directly to produce metrics."
   }
 }

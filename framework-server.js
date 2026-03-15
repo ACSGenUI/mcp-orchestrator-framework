@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve, isAbsolute, basename } from 'path';
 import https from 'https';
@@ -318,6 +318,11 @@ class FrameworkServer {
     // Setup checklist batch tools (write_checklist_section + merge_checklist)
     if (this.config.frameworks.checklistBatchTools?.enabled) {
       this.setupChecklistBatchTools();
+    }
+
+    // Setup update_checklist_section tool (per-category mode only — no-op for other configs)
+    if (this.config.frameworks.checklistBatchTools?.enabled && this.config.frameworks.checklistBatchTools?.updateToolName) {
+      this.setupUpdateChecklistTool();
     }
 
     // Setup standalone checklist quality validation tool
@@ -1201,60 +1206,6 @@ Validation result must return pass=true before finalizing output.
     const checklistConfig = this.config.frameworks.categorizedChecklist;
     if (!checklistConfig?.enabled) return;
 
-    const escapeCSV = (val) => {
-      const str = String(val || '');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
-
-    // ── Individual-files mode ──────────────────────────────────────────────
-    if (checklistConfig.mode === 'individual' && Array.isArray(checklistConfig.individualFiles)) {
-      const categories = {};
-
-      for (const entry of checklistConfig.individualFiles) {
-        const absPath = join(__dirname, entry.path);
-        if (!existsSync(absPath)) {
-          console.error(`Checklist template not found: ${absPath}`);
-          continue;
-        }
-        const { headers, rows } = this.parseCSV(readFileSync(absPath, 'utf8'));
-        const headerLine = headers.join(',');
-        const csvData = [headerLine, ...rows.map(row => headers.map(h => escapeCSV(row[h])).join(','))].join('\n');
-        categories[entry.name] = { rows, csvData };
-
-        const slug = entry.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        const capturedCsvData = csvData;
-        this.server.resource(
-          `checklist/${slug}`,
-          `checklist:///${slug}`,
-          { description: `UI Audit Checklist – ${entry.name} (${rows.length} items)`, mimeType: 'text/csv' },
-          async (resourceUri) => ({
-            contents: [{ uri: resourceUri.toString(), mimeType: 'text/csv', text: capturedCsvData }]
-          })
-        );
-      }
-
-      this.checklistCategories = Object.keys(categories);
-      const totalRows = Object.values(categories).reduce((s, c) => s + c.rows.length, 0);
-      const indexText = this.checklistCategories.map((name, i) => {
-        const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-        return `${i + 1}. checklist/${slug} — ${name} (${categories[name].rows.length} items)`;
-      }).join('\n');
-
-      this.server.resource(
-        'checklist/index', 'checklist:///index',
-        { description: 'Index of all checklist categories with item counts', mimeType: 'text/plain' },
-        async (resourceUri) => ({
-          contents: [{ uri: resourceUri.toString(), mimeType: 'text/plain',
-            text: `# Checklist Categories\n\n${indexText}\n\nTotal items: ${totalRows}\n\nProcess each category sequentially. Read one category resource, audit all its items, then move to the next.` }]
-        })
-      );
-      return;
-    }
-
-    // ── Single-file / groupByField mode (default) ─────────────────────────
     const templatePath = checklistConfig.templatePath || 'templates/ui-audit/EDS_Audit_Checklist.csv';
     const absolutePath = join(__dirname, templatePath);
     if (!existsSync(absolutePath)) {
@@ -1276,6 +1227,14 @@ Validation result must return pass=true before finalizing output.
 
     // Store category names for use by prompts
     this.checklistCategories = Object.keys(categories);
+
+    const escapeCSV = (val) => {
+      const str = String(val || '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
 
     const headerLine = headers.join(',');
 
@@ -1359,15 +1318,21 @@ Validation result must return pass=true before finalizing output.
   }
 
   /**
-   * Register write_checklist_section and merge_checklist tools.
-   * write_checklist_section persists a completed category batch to disk after
-   * running built-in quality validation. merge_checklist assembles all persisted
-   * batches into the final UI-Audit-Checklist.csv.
+   * Register write_checklist_section and (conditionally) merge_checklist or list_audit_files.
+   *
+   * outputMode === "per-category" (new):
+   *   Each write_checklist_section call writes one numbered batch file immediately
+   *   ({Category}-1.csv, {Category}-2.csv, …). Registers list_audit_files.
+   *   Does NOT register merge_checklist — batch files are used directly by generate-report.
+   *
+   * outputMode === "merge" or absent (legacy, unchanged):
+   *   write_checklist_section stores in-memory. merge_checklist assembles into one CSV.
    */
   setupChecklistBatchTools() {
     const batchConfig = this.config.frameworks.checklistBatchTools;
     if (!batchConfig?.enabled) return;
 
+    const outputMode = batchConfig.outputMode || 'merge';
     const qualityConfig = this.config.frameworks.checklistQualityValidation || {};
     const duplicateThreshold = qualityConfig.duplicateThreshold || 0.05;
     const genericPhrases = qualityConfig.genericPhrases || [
@@ -1376,144 +1341,437 @@ Validation result must return pass=true before finalizing output.
       'no issues', 'all good', 'verified', 'checked'
     ];
 
-    // In-memory store for completed batches keyed by category slug
-    this.completedBatches = new Map();
-
     const writeTool = batchConfig.writeToolName || 'write_checklist_section';
-    const mergeTool = batchConfig.mergeToolName || 'merge_checklist';
 
-    const outputMode = batchConfig.outputMode || 'merge';
-    const perCategory = outputMode === 'per-category';
+    if (outputMode === 'per-category') {
+      // ── PER-CATEGORY MODE ────────────────────────────────────────────────────
+      // Batch counters: key = `${baseDir}::${safeCategory}` → next batch number
+      this.batchCounters = new Map();
 
-    // --- write_checklist_section ---
-    this.server.registerTool(writeTool, {
-      title: 'Write Checklist Section',
-      description: perCategory
-        ? 'Validate and write a completed checklist category directly to its own CSV file (e.g. Development.csv). Runs built-in quality validation — rejects the write if quality is insufficient. Call once per category after filling all rows.'
-        : 'Persist a completed checklist category batch. Runs built-in quality validation — rejects the write if quality is insufficient. Call this once per category after filling all rows.',
-      inputSchema: {
-        category: z.string().describe('Category name exactly as listed in checklist/index (e.g. "Development", "Accessibility", "Process & Governance")'),
-        checklist_csv: z.string().describe('Completed CSV content for this category (header + data rows)'),
-        ...(perCategory && { output_dir: z.string().optional().describe('Output directory to write the category CSV into (default: current working directory)') })
-      }
-    }, async ({ category, checklist_csv, output_dir }) => {
-      // Validate category is known
-      if (this.checklistCategories && this.checklistCategories.length > 0) {
-        if (!this.checklistCategories.includes(category)) {
-          return {
-            content: [{ type: 'text', text: `## Write Rejected\n\nUnknown category "${category}". Valid categories: ${this.checklistCategories.join(', ')}` }],
-            isError: true
-          };
+      // --- write_checklist_section (per-category) ---
+      this.server.registerTool(writeTool, {
+        title: 'Write Checklist Section',
+        description: 'Write one batch of ≤30 checklist rows immediately to disk as {Category}-N.csv. Runs quality validation — rejects the write if quality is insufficient.',
+        inputSchema: {
+          category: z.string().describe('Category name exactly as listed in checklist/index (e.g. "Development", "Accessibility")'),
+          checklist_csv: z.string().describe('Completed CSV content for this batch (header + up to 30 data rows)'),
+          output_dir: z.string().describe('Absolute or relative path to the output directory for audit batch files')
         }
-      }
+      }, async ({ category, checklist_csv, output_dir }) => {
+        // Validate category
+        if (this.checklistCategories && this.checklistCategories.length > 0) {
+          if (!this.checklistCategories.includes(category)) {
+            return {
+              content: [{ type: 'text', text: `## Write Rejected\n\nUnknown category "${category}". Valid categories: ${this.checklistCategories.join(', ')}` }],
+              isError: true
+            };
+          }
+        }
 
-      // Parse submitted CSV
-      let parsed;
-      try {
-        parsed = this.parseCSV(checklist_csv);
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `## Write Rejected\n\nCould not parse CSV: ${err.message}` }],
-          isError: true
-        };
-      }
-
-      if (parsed.rows.length === 0) {
-        return {
-          content: [{ type: 'text', text: `## Write Rejected\n\nCSV has no data rows.` }],
-          isError: true
-        };
-      }
-
-      // Run quality validation inline
-      const qualityResult = this._validateBatchQuality(parsed, category, duplicateThreshold, genericPhrases);
-
-      if (!qualityResult.pass) {
-        return {
-          content: [{ type: 'text', text: qualityResult.message }],
-          structuredContent: qualityResult.report,
-          isError: true
-        };
-      }
-
-      // Store the batch in memory
-      this.completedBatches.set(category, {
-        headers: parsed.headers,
-        rows: parsed.rows,
-        csv: checklist_csv,
-        writtenAt: new Date().toISOString()
-      });
-
-      // In per-category mode, write directly to {category}.csv
-      let writtenFile = null;
-      if (perCategory) {
-        const safeFilename = category.replace(/[^a-zA-Z0-9_-]+/g, '-') + '.csv';
-        const baseDir = output_dir
-          ? (isAbsolute(output_dir) ? output_dir : resolve(process.cwd(), output_dir))
-          : process.cwd();
-        const filePath = resolve(baseDir, safeFilename);
+        // Parse submitted CSV
+        let parsed;
         try {
-          if (!existsSync(baseDir)) mkdirSync(baseDir, { recursive: true });
-          writeFileSync(filePath, checklist_csv, 'utf8');
-          writtenFile = filePath;
+          parsed = this.parseCSV(checklist_csv);
         } catch (err) {
           return {
-            content: [{ type: 'text', text: `## Write Failed\n\nQuality passed but could not write file: ${err.message}` }],
+            content: [{ type: 'text', text: `## Write Rejected\n\nCould not parse CSV: ${err.message}` }],
+            isError: true
+          };
+        }
+
+        if (parsed.rows.length === 0) {
+          return {
+            content: [{ type: 'text', text: `## Write Rejected\n\nCSV has no data rows.` }],
+            isError: true
+          };
+        }
+
+        // Quality validation
+        const qualityResult = this._validateBatchQuality(parsed, category, duplicateThreshold, genericPhrases);
+        if (!qualityResult.pass) {
+          return {
+            content: [{ type: 'text', text: qualityResult.message }],
+            structuredContent: qualityResult.report,
+            isError: true
+          };
+        }
+
+        // Resolve output directory
+        const baseDir = isAbsolute(output_dir) ? output_dir : resolve(process.cwd(), output_dir);
+        try {
+          if (!existsSync(baseDir)) mkdirSync(baseDir, { recursive: true });
+        } catch (err) {
+          return {
+            content: [{ type: 'text', text: `## Write Rejected\n\nCould not create output directory: ${err.message}` }],
+            isError: true
+          };
+        }
+
+        // Increment batch counter and write file
+        const safeCategory = category.replace(/[^a-zA-Z0-9_-]/g, '-');
+        const counterKey = `${baseDir}::${safeCategory}`;
+        const batchNum = (this.batchCounters.get(counterKey) || 0) + 1;
+        this.batchCounters.set(counterKey, batchNum);
+
+        const fileName = `${safeCategory}-${batchNum}.csv`;
+        const filePath = resolve(baseDir, fileName);
+        try {
+          writeFileSync(filePath, checklist_csv, 'utf8');
+        } catch (err) {
+          return {
+            content: [{ type: 'text', text: `## Write Failed\n\nCould not write ${fileName}: ${err.message}` }],
+            isError: true
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: `## Batch Written: ${fileName}\n\nQuality validation passed. ${parsed.rows.length} rows written to ${filePath}.`
+          }],
+          structuredContent: { pass: true, category, batchNum, fileName, filePath, rowCount: parsed.rows.length }
+        };
+      });
+
+      // --- list_audit_files ---
+      this.server.registerTool('list_audit_files', {
+        title: 'List Audit Batch Files',
+        description: 'Discover all batch CSV files in the output directory, grouped by category slug and sorted by batch number. Use this at the start of generate-report to find all batch files.',
+        inputSchema: {
+          output_dir: z.string().describe('Absolute or relative path to the output directory containing batch CSV files')
+        }
+      }, async ({ output_dir }) => {
+        const baseDir = isAbsolute(output_dir) ? output_dir : resolve(process.cwd(), output_dir);
+        if (!existsSync(baseDir)) {
+          return {
+            content: [{ type: 'text', text: `## No Files Found\n\nDirectory does not exist: ${baseDir}` }],
+            structuredContent: { categories: {} }
+          };
+        }
+
+        let allFiles;
+        try {
+          allFiles = readdirSync(baseDir).filter(f => f.endsWith('.csv'));
+        } catch (err) {
+          return {
+            content: [{ type: 'text', text: `## Error\n\nCould not read directory: ${err.message}` }],
+            isError: true
+          };
+        }
+
+        // Known output artifact filenames that are not checklist batch files
+        const EXCLUDED = new Set(['UI-Audit-Metrics.csv']);
+
+        const groups = {};
+        for (const f of allFiles) {
+          if (EXCLUDED.has(f)) continue;
+          const batchMatch = f.match(/^(.+)-(\d+)\.csv$/);
+          if (batchMatch) {
+            // Numbered batch: {Category}-N.csv
+            const slug = batchMatch[1];
+            if (!groups[slug]) groups[slug] = [];
+            groups[slug].push({ file: f, path: resolve(baseDir, f), batchNum: parseInt(batchMatch[2], 10) });
+          } else {
+            // Plain {Category}.csv — single-file from a previous session; treat as batch 1
+            const slug = f.slice(0, -4);
+            if (!groups[slug]) groups[slug] = [];
+            groups[slug].push({ file: f, path: resolve(baseDir, f), batchNum: 1 });
+          }
+        }
+
+        // Sort each group by batchNum
+        for (const slug of Object.keys(groups)) {
+          groups[slug].sort((a, b) => a.batchNum - b.batchNum);
+        }
+
+        const lines = ['## Audit Batch Files\n'];
+        for (const [slug, files] of Object.entries(groups)) {
+          lines.push(`### ${slug} (${files.length} batch${files.length !== 1 ? 'es' : ''})`);
+          for (const { file, path: filePath, batchNum } of files) {
+            lines.push(`- Batch ${batchNum}: ${file}  →  ${filePath}`);
+          }
+        }
+
+        return {
+          content: [{ type: 'text', text: lines.join('\n') }],
+          structuredContent: { categories: groups }
+        };
+      });
+
+    } else {
+      // ── LEGACY MERGE MODE (unchanged) ────────────────────────────────────────
+      // In-memory store for completed batches keyed by category slug
+      this.completedBatches = new Map();
+
+      const mergeTool = batchConfig.mergeToolName || 'merge_checklist';
+
+      // --- write_checklist_section (legacy) ---
+      this.server.registerTool(writeTool, {
+        title: 'Write Checklist Section',
+        description: 'Persist a completed checklist category batch. Runs built-in quality validation — rejects the write if quality is insufficient. Call this once per category after filling all rows.',
+        inputSchema: {
+          category: z.string().describe('Category name exactly as listed in checklist/index (e.g. "Development", "Accessibility")'),
+          checklist_csv: z.string().describe('Completed CSV content for this category batch (header + data rows)')
+        }
+      }, async ({ category, checklist_csv }) => {
+        // Validate category is known
+        if (this.checklistCategories && this.checklistCategories.length > 0) {
+          if (!this.checklistCategories.includes(category)) {
+            return {
+              content: [{ type: 'text', text: `## Write Rejected\n\nUnknown category "${category}". Valid categories: ${this.checklistCategories.join(', ')}` }],
+              isError: true
+            };
+          }
+        }
+
+        // Parse submitted CSV
+        let parsed;
+        try {
+          parsed = this.parseCSV(checklist_csv);
+        } catch (err) {
+          return {
+            content: [{ type: 'text', text: `## Write Rejected\n\nCould not parse CSV: ${err.message}` }],
+            isError: true
+          };
+        }
+
+        if (parsed.rows.length === 0) {
+          return {
+            content: [{ type: 'text', text: `## Write Rejected\n\nCSV has no data rows.` }],
+            isError: true
+          };
+        }
+
+        // Run quality validation inline
+        const qualityResult = this._validateBatchQuality(parsed, category, duplicateThreshold, genericPhrases);
+
+        if (!qualityResult.pass) {
+          return {
+            content: [{ type: 'text', text: qualityResult.message }],
+            structuredContent: qualityResult.report,
+            isError: true
+          };
+        }
+
+        // Store the batch
+        this.completedBatches.set(category, {
+          headers: parsed.headers,
+          rows: parsed.rows,
+          csv: checklist_csv,
+          writtenAt: new Date().toISOString()
+        });
+
+        return {
+          content: [{
+            type: 'text',
+            text: `## Batch Accepted: ${category}\n\nQuality validation passed. ${parsed.rows.length} rows stored.\nCompleted categories: ${[...this.completedBatches.keys()].join(', ')}\nRemaining: ${(this.checklistCategories || []).filter(c => !this.completedBatches.has(c)).join(', ') || 'none'}`
+          }],
+          structuredContent: { pass: true, category, rowCount: parsed.rows.length, storedCategories: [...this.completedBatches.keys()] }
+        };
+      });
+
+      // --- merge_checklist (legacy) ---
+      this.server.registerTool(mergeTool, {
+        title: 'Merge Checklist Batches',
+        description: 'Assemble all persisted category batches into the final UI-Audit-Checklist.csv and write it to the workspace. Call after all categories are written via write_checklist_section.',
+        inputSchema: {
+          output_path: z.string().optional().describe('Output file path relative to workspace (default: UI-Audit-Checklist.csv)')
+        }
+      }, async ({ output_path } = {}) => {
+        const expectedCategories = this.checklistCategories || [];
+        const missing = expectedCategories.filter(c => !this.completedBatches.has(c));
+
+        if (missing.length > 0) {
+          return {
+            content: [{ type: 'text', text: `## Merge Blocked\n\nMissing categories: ${missing.join(', ')}\n\nComplete all categories via write_checklist_section before merging.` }],
+            isError: true
+          };
+        }
+
+        if (this.completedBatches.size === 0) {
+          return {
+            content: [{ type: 'text', text: '## Merge Blocked\n\nNo batches have been written yet.' }],
+            isError: true
+          };
+        }
+
+        const firstBatch = this.completedBatches.values().next().value;
+        if (!firstBatch || !firstBatch.headers || firstBatch.headers.length === 0) {
+          return {
+            content: [{ type: 'text', text: '## Merge Failed\n\nFirst batch has no valid headers. Re-run write_checklist_section for all categories.' }],
+            isError: true
+          };
+        }
+        const headers = firstBatch.headers;
+
+        const escapeCSV = (val) => {
+          const str = String(val || '');
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return str;
+        };
+
+        // Merge rows in category order
+        const allRows = [];
+        for (const cat of expectedCategories) {
+          const batch = this.completedBatches.get(cat);
+          if (batch) allRows.push(...batch.rows);
+        }
+
+        const headerLine = headers.join(',');
+        const csvLines = allRows.map(row => headers.map(h => escapeCSV(row[h])).join(','));
+        const finalCSV = [headerLine, ...csvLines].join('\n');
+
+        // Write to disk
+        const outputFile = output_path || 'UI-Audit-Checklist.csv';
+        const outputAbsPath = isAbsolute(outputFile) ? outputFile : resolve(process.cwd(), outputFile);
+        try {
+          const outputDir = dirname(outputAbsPath);
+          if (!existsSync(outputDir)) {
+            mkdirSync(outputDir, { recursive: true });
+          }
+          writeFileSync(outputAbsPath, finalCSV, 'utf8');
+        } catch (err) {
+          return {
+            content: [{ type: 'text', text: `## Merge Failed\n\nCould not write file: ${err.message}` }],
+            isError: true
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: `## Checklist Merged Successfully\n\nFile: ${outputFile}\nTotal rows: ${allRows.length}\nCategories: ${[...this.completedBatches.keys()].join(', ')}\n\nThe merged checklist is ready at the workspace root.`
+          }],
+          structuredContent: {
+            pass: true,
+            outputFile,
+            totalRows: allRows.length,
+            categories: [...this.completedBatches.keys()]
+          }
+        };
+      });
+    }
+  }
+
+  /**
+   * Register update_checklist_section tool (per-category mode only).
+   * Scans all {Category}-N.csv batch files in the output directory, collects
+   * Chrome DevTools rows positionally across all batches, maps the supplied
+   * partial CDT rows onto those positions, then writes back only the modified files.
+   */
+  setupUpdateChecklistTool() {
+    const batchConfig = this.config.frameworks.checklistBatchTools;
+    const updateTool = batchConfig.updateToolName;
+    if (!updateTool) return;
+
+    const FILLABLE = ['Implemented? (Yes / No / NA)', 'Comments', 'Evidence'];
+
+    this.server.registerTool(updateTool, {
+      title: 'Update Checklist Section (Chrome DevTools)',
+      description: 'Update Chrome DevTools rows in existing batch files using positional matching. Supply only the CDT rows (header + filled CDT rows) for the category. The tool scans all batch files for that category, maps the CDT rows positionally, and writes back only modified files.',
+      inputSchema: {
+        category: z.string().describe('Category name exactly as used in write_checklist_section (e.g. "Accessibility")'),
+        checklist_csv: z.string().describe('CSV with header row + only the filled Chrome DevTools rows for this category'),
+        output_dir: z.string().describe('Absolute or relative path to the output directory containing the batch CSV files')
+      }
+    }, async ({ category, checklist_csv, output_dir }) => {
+      const baseDir = isAbsolute(output_dir) ? output_dir : resolve(process.cwd(), output_dir);
+      if (!existsSync(baseDir)) {
+        return {
+          content: [{ type: 'text', text: `## Update Rejected\n\nOutput directory does not exist: ${baseDir}` }],
+          isError: true
+        };
+      }
+
+      // Parse the supplied CDT rows
+      let partialParsed;
+      try {
+        partialParsed = this.parseCSV(checklist_csv);
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `## Update Rejected\n\nCould not parse CSV: ${err.message}` }],
+          isError: true
+        };
+      }
+      const partialRows = partialParsed.rows;
+      if (partialRows.length === 0) {
+        return {
+          content: [{ type: 'text', text: `## Update Rejected\n\nNo data rows found in supplied CSV.` }],
+          isError: true
+        };
+      }
+
+      // Discover all batch files for this category
+      const safeCategory = category.replace(/[^a-zA-Z0-9_-]/g, '-');
+      const prefix = safeCategory + '-';
+      let batchFileNames;
+      try {
+        batchFileNames = readdirSync(baseDir)
+          .filter(f => f.startsWith(prefix) && f.endsWith('.csv') && /^\d+$/.test(f.slice(prefix.length, -4)))
+          .sort((a, b) => parseInt(a.slice(prefix.length, -4), 10) - parseInt(b.slice(prefix.length, -4), 10));
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: `## Update Failed\n\nCould not read directory: ${err.message}` }],
+          isError: true
+        };
+      }
+
+      if (batchFileNames.length === 0) {
+        return {
+          content: [{ type: 'text', text: `## Update Rejected\n\nNo batch files found for category "${category}" in ${baseDir}. Run Phase 1 first.` }],
+          isError: true
+        };
+      }
+
+      // Parse all batch files
+      const parsedFiles = [];
+      for (const fileName of batchFileNames) {
+        const filePath = resolve(baseDir, fileName);
+        try {
+          const content = readFileSync(filePath, 'utf8');
+          const parsed = this.parseCSV(content);
+          parsedFiles.push({ fileName, filePath, headers: parsed.headers, rows: parsed.rows });
+        } catch (err) {
+          return {
+            content: [{ type: 'text', text: `## Update Failed\n\nCould not read ${fileName}: ${err.message}` }],
             isError: true
           };
         }
       }
 
-      const completedList = [...this.completedBatches.keys()].join(', ');
-      const remaining = (this.checklistCategories || []).filter(c => !this.completedBatches.has(c)).join(', ') || 'none';
-      const fileNote = writtenFile ? `\nFile written: ${writtenFile}` : '';
-
-      return {
-        content: [{
-          type: 'text',
-          text: `## Section Accepted: ${category}\n\nQuality validation passed. ${parsed.rows.length} rows written.${fileNote}\nCompleted: ${completedList}\nRemaining: ${remaining}`
-        }],
-        structuredContent: { pass: true, category, rowCount: parsed.rows.length, writtenFile, completedCategories: [...this.completedBatches.keys()] }
-      };
-    });
-
-    // --- merge_checklist ---
-    this.server.registerTool(mergeTool, {
-      title: 'Merge Checklist Batches',
-      description: 'Assemble all persisted category batches into the final UI-Audit-Checklist.csv and write it to the workspace. Call after all categories are written via write_checklist_section.',
-      inputSchema: {
-        output_path: z.string().optional().describe('Output file path relative to workspace (default: UI-Audit-Checklist.csv)')
+      // Collect CDT row positions across all batch files (ordered)
+      const cdtLocations = []; // { fi, ri }
+      for (let fi = 0; fi < parsedFiles.length; fi++) {
+        parsedFiles[fi].rows.forEach((row, ri) => {
+          if (row['Audit Type'] === 'Chrome DevTools') {
+            cdtLocations.push({ fi, ri });
+          }
+        });
       }
-    }, async ({ output_path } = {}) => {
-      const expectedCategories = this.checklistCategories || [];
-      const missing = expectedCategories.filter(c => !this.completedBatches.has(c));
 
-      if (missing.length > 0) {
+      if (cdtLocations.length === 0) {
         return {
-          content: [{ type: 'text', text: `## Merge Blocked\n\nMissing categories: ${missing.join(', ')}\n\nComplete all categories via write_checklist_section before merging.` }],
-          isError: true
+          content: [{ type: 'text', text: `## Update Skipped\n\nNo Chrome DevTools rows found in batch files for category "${category}".` }],
+          structuredContent: { pass: true, category, updatedRows: 0 }
         };
       }
 
-      if (this.completedBatches.size === 0) {
-        return {
-          content: [{ type: 'text', text: '## Merge Blocked\n\nNo batches have been written yet.' }],
-          isError: true
-        };
+      // Positional merge: partial rows → CDT locations
+      const modifiedFileIndices = new Set();
+      const appliedCount = Math.min(cdtLocations.length, partialRows.length);
+      for (let i = 0; i < appliedCount; i++) {
+        const { fi, ri } = cdtLocations[i];
+        for (const col of FILLABLE) {
+          if (partialRows[i][col] !== undefined && partialRows[i][col] !== '') {
+            parsedFiles[fi].rows[ri][col] = partialRows[i][col];
+          }
+        }
+        modifiedFileIndices.add(fi);
       }
 
-      // Headers come from the first batch. All batches share the same template columns
-      // because they originate from the same EDS_Audit_Checklist.csv split by Phase.
-      // If the template changes, write_checklist_section ensures each batch has valid headers.
-      const firstBatch = this.completedBatches.values().next().value;
-      if (!firstBatch || !firstBatch.headers || firstBatch.headers.length === 0) {
-        return {
-          content: [{ type: 'text', text: '## Merge Failed\n\nFirst batch has no valid headers. Re-run write_checklist_section for all categories.' }],
-          isError: true
-        };
-      }
-      const headers = firstBatch.headers;
-
+      // Write back only modified batch files
       const escapeCSV = (val) => {
         const str = String(val || '');
         if (str.includes(',') || str.includes('"') || str.includes('\n')) {
@@ -1522,44 +1780,29 @@ Validation result must return pass=true before finalizing output.
         return str;
       };
 
-      // Merge rows in category order
-      const allRows = [];
-      for (const cat of expectedCategories) {
-        const batch = this.completedBatches.get(cat);
-        if (batch) allRows.push(...batch.rows);
-      }
-
-      const headerLine = headers.join(',');
-      const csvLines = allRows.map(row => headers.map(h => escapeCSV(row[h])).join(','));
-      const finalCSV = [headerLine, ...csvLines].join('\n');
-
-      // Write to disk
-      const outputFile = output_path || 'UI-Audit-Checklist.csv';
-      const outputAbsPath = isAbsolute(outputFile) ? outputFile : resolve(process.cwd(), outputFile);
-      try {
-        const outputDir = dirname(outputAbsPath);
-        if (!existsSync(outputDir)) {
-          mkdirSync(outputDir, { recursive: true });
+      const writtenFiles = [];
+      for (const fi of modifiedFileIndices) {
+        const { filePath, fileName, headers, rows } = parsedFiles[fi];
+        const headerLine = headers.join(',');
+        const csvLines = rows.map(row => headers.map(h => escapeCSV(row[h])).join(','));
+        const updatedCSV = [headerLine, ...csvLines].join('\n');
+        try {
+          writeFileSync(filePath, updatedCSV, 'utf8');
+          writtenFiles.push(fileName);
+        } catch (err) {
+          return {
+            content: [{ type: 'text', text: `## Update Failed\n\nCould not write ${fileName}: ${err.message}` }],
+            isError: true
+          };
         }
-        writeFileSync(outputAbsPath, finalCSV, 'utf8');
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: `## Merge Failed\n\nCould not write file: ${err.message}` }],
-          isError: true
-        };
       }
 
       return {
         content: [{
           type: 'text',
-          text: `## Checklist Merged Successfully\n\nFile: ${outputFile}\nTotal rows: ${allRows.length}\nCategories: ${[...this.completedBatches.keys()].join(', ')}\n\nThe merged checklist is ready at the workspace root.`
+          text: `## CDT Rows Updated: ${category}\n\n${appliedCount} of ${cdtLocations.length} CDT rows updated positionally.\nModified files: ${writtenFiles.join(', ')}`
         }],
-        structuredContent: {
-          pass: true,
-          outputFile,
-          totalRows: allRows.length,
-          categories: [...this.completedBatches.keys()]
-        }
+        structuredContent: { pass: true, category, updatedRows: appliedCount, totalCdtRows: cdtLocations.length, modifiedFiles: writtenFiles }
       };
     });
   }
